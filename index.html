@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Calidad de Aire Urbano</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b8a5a'/%3E%3Cpath d='M12 44h40M18 44V24h10v20M34 44V16h12v28' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='17' cy='17' r='5' fill='%23f0c75e'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --ink: #17202a;
+    --muted: #5f6f7a;
+    --panel: rgba(255, 255, 255, 0.94);
+    --panel-strong: rgba(255, 255, 255, 0.98);
+    --line: rgba(31, 49, 61, 0.14);
+    --good: #1b8a5a;
+    --warn: #b77800;
+    --bad: #be3a34;
+    --blue: #2563a8;
+    --teal: #047a7a;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    color: var(--ink);
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    background: #d9e5d2;
+  }
+
+  button {
+    font: inherit;
+  }
+
+  #viewport {
+    position: fixed;
+    inset: 0;
+  }
+
+  #app-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: minmax(330px, 390px) 1fr minmax(330px, 410px);
+    grid-template-rows: auto 1fr auto;
+    gap: 14px;
+    padding: 16px;
+    pointer-events: none;
+  }
+
+  .panel {
+    pointer-events: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(26, 37, 45, 0.18);
+    backdrop-filter: blur(12px);
+  }
+
+  #policy-panel {
+    grid-row: 1 / span 3;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-head {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .panel-head h1,
+  .panel-head h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+
+  .panel-head p {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .budget-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .metric-box {
+    min-height: 58px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.76);
+  }
+
+  .metric-box span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .metric-box strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 20px;
+  }
+
+  #policy-list {
+    overflow: auto;
+    padding: 12px;
+  }
+
+  .policy-card {
+    width: 100%;
+    padding: 11px;
+    margin: 0 0 9px;
+    text-align: left;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .policy-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(37, 99, 168, 0.45);
+    box-shadow: 0 8px 20px rgba(24, 42, 52, 0.12);
+  }
+
+  .policy-card.selected {
+    border-color: rgba(27, 138, 90, 0.78);
+    background: #edf8f2;
+  }
+
+  .policy-card.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .policy-title {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    justify-content: space-between;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .policy-title small {
+    color: var(--blue);
+    font-weight: 800;
+  }
+
+  .policy-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    color: #263844;
+    background: #eef3f4;
+    border: 1px solid rgba(38, 56, 68, 0.09);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .chip.good {
+    color: #0f6d45;
+    background: #e5f5ed;
+  }
+
+  .chip.warn {
+    color: #8a5900;
+    background: #fff3d9;
+  }
+
+  .chip.bad {
+    color: #9d2925;
+    background: #fae8e7;
+  }
+
+  .policy-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  #top-panel {
+    grid-column: 2;
+    align-self: start;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .year-block {
+    min-width: 150px;
+  }
+
+  .year-block span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  .year-block strong {
+    font-size: 30px;
+    line-height: 1;
+  }
+
+  .timeline {
+    height: 12px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(23, 32, 42, 0.12);
+  }
+
+  #timeline-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #1b8a5a, #2563a8, #b77800);
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .icon-button,
+  .action-button {
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    color: var(--ink);
+    background: #fff;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .icon-button {
+    width: 42px;
+    font-size: 18px;
+  }
+
+  .action-button {
+    padding: 0 13px;
+  }
+
+  .action-button.primary {
+    color: #fff;
+    border-color: #1b6a50;
+    background: #1b8a5a;
+  }
+
+  .action-button.secondary {
+    color: #fff;
+    border-color: #1d4f87;
+    background: #2563a8;
+  }
+
+  #monitor-panel {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: start;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #monitor-panel .panel-head {
+    background: rgba(18, 30, 37, 0.94);
+    color: #fff;
+  }
+
+  #monitor-panel .panel-head p {
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  #param-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+    max-height: calc(100vh - 290px);
+    overflow: auto;
+  }
+
+  .param-card {
+    min-height: 78px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-strong);
+  }
+
+  .param-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .param-card strong {
+    display: block;
+    margin: 5px 0;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .param-card em {
+    color: var(--muted);
+    font-size: 11px;
+    font-style: normal;
+  }
+
+  .bar {
+    position: relative;
+    width: 100%;
+    height: 5px;
+    margin-top: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(23, 32, 42, 0.1);
+  }
+
+  .bar i {
+    display: block;
+    width: 20%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--good);
+  }
+
+  #insights {
+    padding: 0 12px 12px;
+  }
+
+  .insight-row {
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .insight-row span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .insight-row strong {
+    display: block;
+    margin-top: 3px;
+    line-height: 1.25;
+  }
+
+  #bottom-panel {
+    grid-column: 2 / span 2;
+    grid-row: 3;
+    align-self: end;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 12px;
+  }
+
+  #chart {
+    width: 100%;
+    height: 150px;
+    display: block;
+  }
+
+  .diagnosis {
+    display: grid;
+    gap: 8px;
+    align-content: start;
+  }
+
+  .diagnosis h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  #technical-status {
+    display: inline-flex;
+    width: fit-content;
+    padding: 5px 9px;
+    border-radius: 999px;
+    color: #fff;
+    background: var(--warn);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  #diagnosis-text {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  @media (max-width: 1180px) {
+    #app-shell {
+      grid-template-columns: minmax(300px, 360px) 1fr;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    #policy-panel {
+      grid-row: 1 / span 3;
+    }
+
+    #monitor-panel {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    #bottom-panel {
+      grid-column: 2;
+      grid-row: 3;
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 820px) {
+    body {
+      overflow: auto;
+    }
+
+    #viewport {
+      height: 520px;
+      bottom: auto;
+    }
+
+    #app-shell {
+      position: relative;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto;
+      padding-top: 540px;
+      overflow: visible;
+    }
+
+    #policy-panel,
+    #top-panel,
+    #monitor-panel,
+    #bottom-panel {
+      grid-column: 1;
+      grid-row: auto;
+    }
+
+    #top-panel {
+      grid-template-columns: 1fr;
+    }
+
+    #param-grid {
+      max-height: none;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="viewport"></div>
+
+<main id="app-shell">
+  <section id="policy-panel" class="panel">
+    <div class="panel-head">
+      <h1>Simulador de calidad de aire</h1>
+      <p>Plan urbano a cinco años con presupuesto, aceptación ciudadana y equidad ambiental.</p>
+    </div>
+    <div class="budget-strip">
+      <div class="metric-box"><span>Disponible</span><strong id="budget-left">100</strong></div>
+      <div class="metric-box"><span>Usado</span><strong id="budget-used">0</strong></div>
+      <div class="metric-box"><span>Políticas</span><strong id="policy-count">0/5</strong></div>
+      <div class="metric-box"><span>Equidad</span><strong id="equity-score">45</strong></div>
+    </div>
+    <div id="policy-list" aria-label="Políticas disponibles"></div>
+  </section>
+
+  <section id="top-panel" class="panel">
+    <div class="year-block">
+      <span>Simulación</span>
+      <strong id="year-label">Año 0.0</strong>
+    </div>
+    <div class="timeline" aria-label="Progreso de simulación">
+      <div id="timeline-fill"></div>
+    </div>
+    <div class="actions">
+      <button id="btn-start" class="action-button primary" type="button">Iniciar</button>
+      <button id="btn-reset" class="icon-button" type="button" title="Reiniciar">↺</button>
+      <button id="btn-report" class="action-button secondary" type="button">Exportar reporte</button>
+    </div>
+  </section>
+
+  <section id="monitor-panel" class="panel">
+    <div class="panel-head">
+      <h2>Estación de monitoreo</h2>
+      <p id="scenario-label">Escenario inicial con alta exposición urbana.</p>
+    </div>
+    <div id="param-grid"></div>
+    <div id="insights">
+      <div class="insight-row"><span>Fuente dominante probable</span><strong id="source-help">--</strong></div>
+      <div class="insight-row"><span>Condición agravante</span><strong id="condition-help">--</strong></div>
+      <div class="insight-row"><span>Prioridad de intervención</span><strong id="priority-help">--</strong></div>
+    </div>
+  </section>
+
+  <section id="bottom-panel" class="panel">
+    <svg id="chart" viewBox="0 0 720 180" role="img" aria-label="Evolución de contaminantes"></svg>
+    <div class="diagnosis">
+      <h2>Diagnóstico técnico</h2>
+      <span id="technical-status">Parcialmente aceptable</span>
+      <p id="diagnosis-text">Selecciona políticas y ejecuta la simulación para evaluar el plan.</p>
+    </div>
+  </section>
+</main>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+
+const ROUTES_URL = "./routes.json";
+const MAX_POLICIES = 5;
+const BUDGET = 100;
+const TOTAL_YEARS = 5;
+const YEAR_DURATION_MS = 10000;
+
+const baseline = {
+  pm25: 67.0,
+  pm10: 98.1,
+  co2: 496,
+  nox: 94,
+  o3: 20.2,
+  cov: 33.9,
+  temp: 25.7,
+  wind: 1.5,
+  hmix: 102,
+  vent: 6,
+  stagnation: 94,
+  exposure: 78000,
+  vulnerable: 18000,
+  acceptance: 70,
+  equity: 45
+};
+
+const policies = [
+  { code: "P1", name: "Zona de bajas emisiones", cost: 35, implementation: 3, degradation: null, acceptance: -12, equity: 8, description: "Restringe vehículos altamente contaminantes en el centro.", effects: { pm25: -0.18, pm10: -0.12, nox: -0.25, cov: -0.08, co2: -0.10, temp: 0, wind: 0, hmix: 0, exposure: -0.12 } },
+  { code: "P2", name: "Buses eléctricos o de baja emisión", cost: 45, implementation: 5, degradation: null, acceptance: 5, equity: 12, description: "Reduce emisiones del transporte público.", effects: { pm25: -0.15, pm10: -0.08, nox: -0.30, cov: -0.04, co2: -0.12, temp: 0, wind: 0, hmix: 0, exposure: -0.10 } },
+  { code: "P3", name: "Restricción vehicular parcial", cost: 0, implementation: 1, degradation: null, acceptance: -15, equity: -5, description: "Reduce temporalmente circulación de vehículos particulares.", effects: { pm25: -0.12, pm10: -0.08, nox: -0.15, cov: -0.06, co2: -0.08, temp: 0, wind: 0, hmix: 0, exposure: -0.08 } },
+  { code: "P4", name: "Ciclorrutas y vías peatonales", cost: 25, implementation: 3, degradation: null, acceptance: 8, equity: 10, description: "Disminuye viajes cortos motorizados.", effects: { pm25: -0.08, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.07, temp: -0.2, wind: 0, hmix: 0, exposure: -0.06 } },
+  { code: "P5", name: "Arborización urbana técnica", cost: 20, implementation: 5, degradation: null, acceptance: 12, equity: 8, description: "Aumenta cobertura vegetal y reduce isla de calor.", effects: { pm25: -0.05, pm10: -0.08, nox: 0, cov: -0.02, co2: -0.03, temp: -1.1, wind: 0, hmix: 0.05, exposure: -0.07 } },
+  { code: "P6", name: "Corredores urbanos de ventilación", cost: 30, implementation: 5, degradation: null, acceptance: -5, equity: 6, description: "Reduce bloqueo del flujo de aire en zonas densas.", effects: { pm25: -0.10, pm10: -0.10, nox: -0.08, cov: -0.06, co2: 0, temp: -0.4, wind: 0.18, hmix: 0.15, exposure: -0.10 } },
+  { code: "P7", name: "Control de obras y polvo", cost: 15, implementation: 1, degradation: 2, acceptance: 4, equity: 4, description: "Reduce PM10 por obras, vías destapadas y material particulado grueso.", effects: { pm25: -0.02, pm10: -0.22, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.04 } },
+  { code: "P8", name: "Control de COV", cost: 25, implementation: 3, degradation: 2, acceptance: -4, equity: 3, description: "Reduce precursores de ozono en comercio e industria liviana.", effects: { pm25: -0.03, pm10: -0.02, nox: 0, cov: -0.30, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.03 } },
+  { code: "P9", name: "Teletrabajo y horarios escalonados", cost: 10, implementation: 1, degradation: 1, acceptance: 2, equity: -2, description: "Reduce congestión en horas pico.", effects: { pm25: -0.07, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.06, temp: 0, wind: 0, hmix: 0, exposure: -0.06 } },
+  { code: "P10", name: "Alertas y gestión de exposición", cost: 10, implementation: 1, degradation: 1, acceptance: 10, equity: 15, description: "Reduce exposición de población vulnerable sin reducir emisiones.", effects: { pm25: 0, pm10: 0, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.18 } }
+];
+
+const paramDefinitions = [
+  { key: "pm25", label: "PM2.5", unit: "µg/m³", min: 5, max: 80, digits: 1, inverse: true },
+  { key: "pm10", label: "PM10", unit: "µg/m³", min: 10, max: 120, digits: 1, inverse: true },
+  { key: "co2", label: "CO₂", unit: "ppm", min: 400, max: 700, digits: 0, inverse: true },
+  { key: "nox", label: "NOx", unit: "ppb", min: 10, max: 120, digits: 0, inverse: true },
+  { key: "o3", label: "O₃", unit: "ppb", min: 10, max: 60, digits: 1, inverse: true },
+  { key: "cov", label: "COV", unit: "µg/m³", min: 5, max: 50, digits: 1, inverse: true },
+  { key: "temp", label: "Temperatura", unit: "°C", min: 18, max: 34, digits: 1, inverse: true },
+  { key: "wind", label: "Vel. viento", unit: "m/s", min: 0.5, max: 5.5, digits: 1 },
+  { key: "hmix", label: "Altura mezcla", unit: "m", min: 70, max: 220, digits: 0 },
+  { key: "vent", label: "Índice ventilación", unit: "0-100", min: 0, max: 100, digits: 0 },
+  { key: "stagnation", label: "Estancamiento", unit: "0-100", min: 0, max: 100, digits: 0, inverse: true },
+  { key: "exposure", label: "Población expuesta", unit: "hab.", min: 30000, max: 80000, digits: 0, inverse: true }
+];
+
+const selectedPolicies = new Set();
+let simulationStart = null;
+let simulationRunning = false;
+let currentYear = 0;
+let routesData = null;
+let allRoutes = [];
+let lastCityRefresh = -1;
+
+const state = {
+  smoothed: {},
+  history: []
+};
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function fmt(value, digits = 0) {
+  return Number(value).toLocaleString("es-CO", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  });
+}
+
+function getSelectedPolicies() {
+  return policies.filter(policy => selectedPolicies.has(policy.code));
+}
+
+function getBudgetUsed() {
+  return getSelectedPolicies().reduce((total, policy) => total + policy.cost, 0);
+}
+
+function policyProgress(policy, year) {
+  if (year <= 0) return 0;
+  const ramp = clamp(year / policy.implementation, 0, 1);
+  if (!policy.degradation || year <= policy.implementation) return ramp;
+  const decay = clamp((year - policy.implementation) / policy.degradation, 0, 1);
+  return ramp * (1 - (0.8 * decay));
+}
+
+function buildEffectSums(year) {
+  const sums = { pm25: 0, pm10: 0, co2: 0, nox: 0, cov: 0, temp: 0, wind: 0, hmix: 0, exposure: 0 };
+  let acceptance = baseline.acceptance;
+  let equity = baseline.equity;
+
+  getSelectedPolicies().forEach(policy => {
+    const progress = policyProgress(policy, year);
+    Object.keys(sums).forEach(key => {
+      sums[key] += (policy.effects[key] || 0) * progress;
+    });
+    acceptance += policy.acceptance * progress;
+    equity += policy.equity * progress;
+  });
+
+  return {
+    sums,
+    acceptance: clamp(acceptance, 0, 100),
+    equity: clamp(equity, 0, 100)
+  };
+}
+
+function calculateValues(year) {
+  const { sums, acceptance, equity } = buildEffectSums(year);
+  const pm25 = baseline.pm25 * clamp(1 + sums.pm25, 0.25, 1.25);
+  const pm10 = baseline.pm10 * clamp(1 + sums.pm10, 0.25, 1.25);
+  const co2 = baseline.co2 * clamp(1 + sums.co2, 0.65, 1.15);
+  const nox = baseline.nox * clamp(1 + sums.nox, 0.25, 1.25);
+  const cov = baseline.cov * clamp(1 + sums.cov, 0.25, 1.25);
+  const temp = baseline.temp + sums.temp;
+  const wind = baseline.wind * clamp(1 + sums.wind, 0.55, 1.65);
+  const hmix = baseline.hmix * clamp(1 + sums.hmix, 0.8, 1.45);
+  const exposure = baseline.exposure * clamp(1 + sums.exposure, 0.35, 1.05);
+  const vent = clamp(baseline.vent + ((wind / baseline.wind - 1) * 58) + ((hmix / baseline.hmix - 1) * 34) + (Math.max(0, -sums.pm25) * 32), 0, 100);
+  const stagnation = clamp(100 - vent, 0, 100);
+
+  const covReduction = clamp(1 - (cov / baseline.cov), -0.2, 0.8);
+  const noxReduction = clamp(1 - (nox / baseline.nox), -0.2, 0.8);
+  let factorNoxCov = 0;
+  if (covReduction >= 0.20) {
+    factorNoxCov = -0.12;
+  } else if (noxReduction >= 0.20 && covReduction < 0.10) {
+    factorNoxCov = 0.08;
+  } else if (noxReduction >= 0.20 && covReduction >= 0.10) {
+    factorNoxCov = -0.05;
+  }
+  const factorTemp = Math.max(0, temp - baseline.temp) * 0.03;
+  const factorVent = Math.max(0, (wind / baseline.wind - 1) * 100) * -0.005;
+  const o3 = clamp(baseline.o3 * (1 + factorNoxCov + factorTemp + factorVent), 6, 90);
+
+  return {
+    year,
+    pm25,
+    pm10,
+    co2,
+    nox,
+    o3,
+    cov,
+    temp,
+    wind,
+    hmix,
+    vent,
+    stagnation,
+    exposure,
+    vulnerable: baseline.vulnerable * clamp(exposure / baseline.exposure, 0.35, 1.05),
+    acceptance,
+    equity
+  };
+}
+
+function buildHistory() {
+  state.history = [];
+  for (let year = 0; year <= TOTAL_YEARS; year++) {
+    state.history.push(calculateValues(year));
+  }
+}
+
+function reduction(key, values) {
+  return (baseline[key] - values[key]) / baseline[key];
+}
+
+function evaluatePlan(values) {
+  const budgetOk = getBudgetUsed() <= BUDGET;
+  const criteria = [
+    { label: "PM2.5", pass: reduction("pm25", values) >= 0.25 },
+    { label: "PM10", pass: reduction("pm10", values) >= 0.20 },
+    { label: "NOx", pass: reduction("nox", values) >= 0.20 },
+    { label: "Exposición", pass: reduction("exposure", values) >= 0.20 },
+    { label: "Aceptación", pass: values.acceptance >= 50 },
+    { label: "Equidad", pass: values.equity >= 55 },
+    { label: "O₃", pass: ((values.o3 - baseline.o3) / baseline.o3) <= 0.05 }
+  ];
+  const failures = criteria.filter(item => !item.pass);
+  const o3Increase = (values.o3 - baseline.o3) / baseline.o3;
+
+  let status = "Parcialmente aceptable";
+  let tone = "warn";
+  if (
+    !budgetOk ||
+    o3Increase > 0.10 ||
+    values.acceptance < 40 ||
+    reduction("pm25", values) < 0.15 ||
+    reduction("exposure", values) <= 0
+  ) {
+    status = "No aceptable";
+    tone = "bad";
+  } else if (budgetOk && failures.length === 0) {
+    status = "Aceptable";
+    tone = "good";
+  } else if (budgetOk && failures.length <= 2) {
+    status = "Parcialmente aceptable";
+    tone = "warn";
+  } else {
+    status = "No aceptable";
+    tone = "bad";
+  }
+
+  return { status, tone, failures, criteria, budgetOk };
+}
+
+function getInsights(values) {
+  const trafficScore = (values.nox / baseline.nox) + (values.co2 / baseline.co2) + (values.pm25 / baseline.pm25);
+  const dustScore = values.pm10 / baseline.pm10;
+  const covScore = values.cov / baseline.cov;
+  let source = "Tráfico urbano y combustión móvil";
+  if (dustScore > trafficScore / 3 + 0.9) source = "Polvo resuspendido y obras urbanas";
+  if (covScore > 0.92 && values.o3 > baseline.o3 * 0.98) source = "COV de comercio e industria liviana";
+
+  let condition = "Baja ventilación y estancamiento atmosférico";
+  if (values.temp > baseline.temp + 0.3) condition = "Isla de calor urbana";
+  if (values.wind > baseline.wind * 1.08 && values.stagnation < 75) condition = "Persisten emisiones aunque mejora la dispersión";
+
+  let priority = "Reducir tráfico y proteger población vulnerable";
+  if (values.pm10 > baseline.pm10 * 0.82) priority = "Controlar polvo, obras y vías destapadas";
+  if (values.o3 > baseline.o3 * 1.05) priority = "Reducir COV sin descuidar química NOx-O₃";
+  if (values.equity < 55) priority = "Reforzar equidad ambiental en zonas expuestas";
+
+  return { source, condition, priority };
+}
+
+function smooth(key, target, alpha = 0.16) {
+  if (!Number.isFinite(state.smoothed[key])) {
+    state.smoothed[key] = target;
+  } else {
+    state.smoothed[key] = lerp(state.smoothed[key], target, alpha);
+  }
+  return state.smoothed[key];
+}
+
+function renderPolicies() {
+  const list = document.getElementById("policy-list");
+  const used = getBudgetUsed();
+  const count = selectedPolicies.size;
+  list.innerHTML = "";
+
+  policies.forEach(policy => {
+    const isSelected = selectedPolicies.has(policy.code);
+    const wouldExceed = !isSelected && (used + policy.cost > BUDGET || count >= MAX_POLICIES);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `policy-card${isSelected ? " selected" : ""}${wouldExceed ? " disabled" : ""}`;
+    button.dataset.code = policy.code;
+    button.innerHTML = `
+      <div class="policy-title"><span>${policy.name}</span><small>${policy.code}</small></div>
+      <div class="policy-meta">
+        <span class="chip ${policy.cost === 0 ? "good" : ""}">${policy.cost} pts</span>
+        <span class="chip">A ${policy.implementation} año${policy.implementation === 1 ? "" : "s"}</span>
+        <span class="chip ${policy.degradation ? "warn" : "good"}">${policy.degradation ? `Degrada ${policy.degradation} año${policy.degradation === 1 ? "" : "s"}` : "Estable"}</span>
+        <span class="chip ${policy.acceptance >= 0 ? "good" : "bad"}">Acept. ${policy.acceptance > 0 ? "+" : ""}${policy.acceptance}</span>
+        <span class="chip ${policy.equity >= 0 ? "good" : "bad"}">Equidad ${policy.equity > 0 ? "+" : ""}${policy.equity}</span>
+      </div>
+      <p>${policy.description}</p>
+    `;
+    button.addEventListener("click", () => {
+      if (simulationRunning) return;
+      if (selectedPolicies.has(policy.code)) {
+        selectedPolicies.delete(policy.code);
+      } else if (!wouldExceed) {
+        selectedPolicies.add(policy.code);
+      }
+      buildHistory();
+      renderPolicies();
+      updateDashboard(calculateValues(currentYear));
+      refreshCityForYear(currentYear, true);
+    });
+    list.appendChild(button);
+  });
+
+  document.getElementById("budget-left").textContent = BUDGET - used;
+  document.getElementById("budget-used").textContent = used;
+  document.getElementById("policy-count").textContent = `${count}/${MAX_POLICIES}`;
+  document.getElementById("equity-score").textContent = Math.round(calculateValues(currentYear).equity);
+}
+
+function qualityColor(def, value) {
+  const ratio = clamp((value - def.min) / (def.max - def.min), 0, 1);
+  const risk = def.inverse ? ratio : 1 - ratio;
+  if (risk < 0.38) return "var(--good)";
+  if (risk < 0.68) return "var(--warn)";
+  return "var(--bad)";
+}
+
+function updateDashboard(rawValues) {
+  const values = { ...rawValues };
+  paramDefinitions.forEach(def => {
+    values[def.key] = smooth(def.key, rawValues[def.key], simulationRunning ? 0.11 : 0.35);
+  });
+
+  const grid = document.getElementById("param-grid");
+  grid.innerHTML = "";
+  paramDefinitions.forEach(def => {
+    const value = values[def.key];
+    const ratio = clamp((value - def.min) / (def.max - def.min), 0, 1);
+    const width = `${Math.round(ratio * 100)}%`;
+    const card = document.createElement("div");
+    card.className = "param-card";
+    card.innerHTML = `
+      <span>${def.label}</span>
+      <strong>${fmt(value, def.digits)}</strong>
+      <em>${def.unit}</em>
+      <div class="bar"><i style="width:${width};background:${qualityColor(def, value)}"></i></div>
+    `;
+    grid.appendChild(card);
+  });
+
+  document.getElementById("year-label").textContent = `Año ${rawValues.year.toFixed(1)}`;
+  document.getElementById("timeline-fill").style.width = `${clamp(rawValues.year / TOTAL_YEARS, 0, 1) * 100}%`;
+  document.getElementById("equity-score").textContent = Math.round(rawValues.equity);
+
+  const scenario = rawValues.pm25 > 55 || rawValues.stagnation > 85 ? "Crítico" : (rawValues.pm25 > 32 || rawValues.stagnation > 65 ? "Moderado" : "Mejorado");
+  document.getElementById("scenario-label").textContent = `${scenario}: ventilación ${rawValues.vent >= 60 ? "alta" : rawValues.vent >= 35 ? "media" : "baja"}, aceptación ${Math.round(rawValues.acceptance)}/100.`;
+
+  const insights = getInsights(rawValues);
+  document.getElementById("source-help").textContent = insights.source;
+  document.getElementById("condition-help").textContent = insights.condition;
+  document.getElementById("priority-help").textContent = insights.priority;
+
+  const finalValues = calculateValues(TOTAL_YEARS);
+  const evaluation = evaluatePlan(finalValues);
+  const status = document.getElementById("technical-status");
+  status.textContent = evaluation.status;
+  status.style.background = evaluation.tone === "good" ? "var(--good)" : evaluation.tone === "bad" ? "var(--bad)" : "var(--warn)";
+  const failed = evaluation.failures.map(item => item.label).join(", ");
+  document.getElementById("diagnosis-text").textContent = evaluation.failures.length
+    ? `Fortalezas: reducción acumulada de emisiones y exposición según políticas activas. Debilidades pendientes: ${failed}.`
+    : "El plan cumple presupuesto, metas ambientales y criterios sociales al cierre del año 5.";
+
+  drawChart();
+  updateVisualTargets(rawValues);
+}
+
+function drawChart() {
+  const svg = document.getElementById("chart");
+  const series = [
+    { key: "pm25", label: "PM2.5", color: "#be3a34" },
+    { key: "pm10", label: "PM10", color: "#b77800" },
+    { key: "nox", label: "NOx", color: "#2563a8" },
+    { key: "o3", label: "O₃", color: "#047a7a" }
+  ];
+  const padding = { left: 42, right: 18, top: 20, bottom: 34 };
+  const w = 720 - padding.left - padding.right;
+  const h = 180 - padding.top - padding.bottom;
+  const points = state.history.length ? state.history : Array.from({ length: 6 }, (_, year) => calculateValues(year));
+
+  let markup = `
+    <rect width="720" height="180" rx="8" fill="rgba(255,255,255,0.86)"></rect>
+    <line x1="${padding.left}" y1="${padding.top + h}" x2="${padding.left + w}" y2="${padding.top + h}" stroke="rgba(23,32,42,0.22)"></line>
+    <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + h}" stroke="rgba(23,32,42,0.22)"></line>
+  `;
+
+  series.forEach((serie, idx) => {
+    const base = baseline[serie.key];
+    const coords = points.map(item => {
+      const x = padding.left + (item.year / TOTAL_YEARS) * w;
+      const pct = clamp(item[serie.key] / base, 0.35, 1.12);
+      const y = padding.top + (1 - ((pct - 0.35) / 0.77)) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    markup += `<polyline points="${coords}" fill="none" stroke="${serie.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>`;
+    markup += `<text x="${padding.left + idx * 92}" y="166" fill="${serie.color}" font-size="12" font-weight="700">${serie.label}</text>`;
+  });
+
+  for (let year = 0; year <= TOTAL_YEARS; year++) {
+    const x = padding.left + (year / TOTAL_YEARS) * w;
+    markup += `<text x="${x}" y="153" text-anchor="middle" fill="#5f6f7a" font-size="11">${year}</text>`;
+  }
+  markup += `<text x="48" y="16" fill="#17202a" font-size="13" font-weight="700">Evolución relativa por contaminante</text>`;
+  svg.innerHTML = markup;
+}
+
+const viewport = document.getElementById("viewport");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xd9e5d2);
+scene.fog = new THREE.FogExp2(0xd4ddd1, 0.004);
+
+const aspect = window.innerWidth / window.innerHeight;
+const cameraSize = 88;
+const camera = new THREE.OrthographicCamera(-cameraSize * aspect, cameraSize * aspect, cameraSize, -cameraSize, 0.1, 600);
+camera.position.set(105, 95, 105);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+viewport.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(8, 0, 5);
+controls.maxPolarAngle = Math.PI * 0.48;
+controls.update();
+
+const sun = new THREE.DirectionalLight(0xfff2d6, 1.15);
+sun.position.set(70, 100, 45);
+sun.castShadow = true;
+sun.shadow.camera.left = -110;
+sun.shadow.camera.right = 110;
+sun.shadow.camera.top = 110;
+sun.shadow.camera.bottom = -110;
+sun.shadow.camera.far = 260;
+sun.shadow.mapSize.width = 4096;
+sun.shadow.mapSize.height = 4096;
+
+const ambient = new THREE.AmbientLight(0xd9ecff, 0.52);
+const hemi = new THREE.HemisphereLight(0x9ed7ff, 0xd2c6ad, 0.42);
+scene.add(sun, ambient, hemi);
+
+const visualTargets = {
+  bg: scene.background.clone(),
+  fog: scene.fog.color.clone(),
+  fogDensity: scene.fog.density,
+  sun: sun.intensity,
+  ambient: ambient.intensity
+};
+
+const base = new THREE.Mesh(
+  new RoundedBoxGeometry(132, 2, 132, 6, 2),
+  new THREE.MeshStandardMaterial({ color: 0xe7e1d5, roughness: 0.85 })
+);
+base.position.y = -0.6;
+base.receiveShadow = true;
+scene.add(base);
+
+const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x3f4548, roughness: 0.9 });
+const crosswalkMaterial = new THREE.MeshStandardMaterial({ color: 0xe8eceb, roughness: 0.8 });
+const buildingMaterials = [0x8fc4e8, 0xf0b46e, 0xa6c98f, 0xc79ad3, 0xe38f78, 0x9eb0b6, 0x78b9b1].map(color => new THREE.MeshStandardMaterial({ color, roughness: 0.72 }));
+const treeMaterials = {
+  trunk: new THREE.MeshStandardMaterial({ color: 0x6b4633, roughness: 0.9 }),
+  leafA: new THREE.MeshStandardMaterial({ color: 0x2f8f52, roughness: 0.8 }),
+  leafB: new THREE.MeshStandardMaterial({ color: 0x58a85a, roughness: 0.8 })
+};
+
+let buildings = [];
+let trees = [];
+const cars = [];
+let maxCars = 34;
+let spawnInterval = 1150;
+let lastSpawn = 0;
+let routeIndex = 0;
+
+function seededRandom(seed) {
+  let value = seed >>> 0;
+  return () => {
+    value = (value + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(value ^ (value >>> 15), value | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function disposeObject(object) {
+  object.traverse(node => {
+    node.geometry?.dispose?.();
+    if (Array.isArray(node.material)) node.material.forEach(material => material.dispose?.());
+    else node.material?.dispose?.();
+  });
+}
+
+function clearObjects(list) {
+  list.forEach(object => {
+    scene.remove(object);
+    disposeObject(object);
+  });
+  list.length = 0;
+}
+
+function addRoad(width, depth, x, z) {
+  const road = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, depth), roadMaterial);
+  road.position.set(x, 0.08, z);
+  road.receiveShadow = true;
+  scene.add(road);
+}
+
+function addCrosswalk(x, z, rotate = false) {
+  for (let i = -2; i <= 2; i++) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(rotate ? 0.55 : 5.4, 0.18, rotate ? 5.4 : 0.55), crosswalkMaterial);
+    stripe.position.set(x + (rotate ? i * 1.05 : 0), 0.2, z + (rotate ? 0 : i * 1.05));
+    scene.add(stripe);
+  }
+}
+
+function buildRoadNetwork() {
+  [-44, -20, 4, 28, 52].forEach(z => addRoad(116, 6.2, 0, z));
+  [-48, -24, 0, 24, 48].forEach(x => addRoad(6.2, 116, x, 2));
+  addRoad(80, 5.5, -6, -56);
+  addRoad(5.5, 72, 58, -10);
+  [-24, 0, 24, 48].forEach(x => [-20, 4, 28].forEach(z => addCrosswalk(x, z, x % 48 === 0)));
+}
+
+function createBuilding(x, z, width, depth, height, material, rng) {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+  body.position.y = height / 2;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(width * 0.78, Math.max(0.8, height * 0.05), depth * 0.78),
+    new THREE.MeshStandardMaterial({ color: rng() > 0.5 ? 0x56636b : 0x6f7d86, roughness: 0.75 })
+  );
+  roof.position.y = height + Math.max(0.45, height * 0.03);
+  roof.castShadow = true;
+  group.add(roof);
+
+  group.position.set(x, 0.35, z);
+  return group;
+}
+
+function buildBuildings() {
+  clearObjects(buildings);
+  const rng = seededRandom(14791);
+  const roadXs = new Set([-48, -24, 0, 24, 48]);
+  const roadZs = new Set([-44, -20, 4, 28, 52]);
+  for (let x = -56; x <= 56; x += 8) {
+    for (let z = -56; z <= 56; z += 8) {
+      if (roadXs.has(x) || roadZs.has(z)) continue;
+      if (Math.abs(x - 58) < 8 || rng() < 0.26) continue;
+      const downtown = Math.hypot(x + 4, z + 6) < 38;
+      const width = 4.2 + rng() * 2.7;
+      const depth = 4.2 + rng() * 2.7;
+      const height = downtown ? 16 + rng() * 38 : 7 + rng() * 18;
+      const material = buildingMaterials[Math.floor(rng() * buildingMaterials.length)];
+      const building = createBuilding(x, z, width, depth, height, material, rng);
+      scene.add(building);
+      buildings.push(building);
+    }
+  }
+}
+
+function createTree(x, z, scale, altLeaf = false) {
+  const group = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * scale, 0.34 * scale, 2.1 * scale, 7), treeMaterials.trunk);
+  trunk.position.y = 1.05 * scale;
+  trunk.castShadow = true;
+  const leaf = new THREE.Mesh(new THREE.DodecahedronGeometry(1.35 * scale), altLeaf ? treeMaterials.leafB : treeMaterials.leafA);
+  leaf.position.y = 2.9 * scale;
+  leaf.castShadow = true;
+  group.add(trunk, leaf);
+  group.position.set(x, 0.24, z);
+  return group;
+}
+
+function rebuildTrees(count) {
+  clearObjects(trees);
+  const rng = seededRandom(8128 + count);
+  const roadXs = [-48, -24, 0, 24, 48];
+  const roadZs = [-44, -20, 4, 28, 52];
+  let attempts = 0;
+  while (trees.length < count && attempts < count * 40) {
+    attempts++;
+    const x = -60 + rng() * 120;
+    const z = -60 + rng() * 120;
+    if (roadXs.some(rx => Math.abs(x - rx) < 5) || roadZs.some(rz => Math.abs(z - rz) < 5)) continue;
+    if (rng() < 0.42 && Math.hypot(x + 4, z + 6) < 40) continue;
+    const tree = createTree(x, z, 0.75 + rng() * 0.45, rng() > 0.5);
+    scene.add(tree);
+    trees.push(tree);
+  }
+}
+
+function gridToWorld(point) {
+  const grid = routesData?.grid || { cellSize: 2, origin: { x: -35, z: -35 } };
+  return new THREE.Vector3(grid.origin.x + point.x * grid.cellSize, 0.72, grid.origin.z + point.z * grid.cellSize);
+}
+
+async function loadRoutes() {
+  try {
+    const response = await fetch(ROUTES_URL, { cache: "no-store" });
+    routesData = await response.json();
+  } catch (error) {
+    routesData = {
+      grid: { cols: 40, rows: 40, cellSize: 2, origin: { x: -35, z: -35 } },
+      routes: [
+        { id: 1, points: [{ x: 0, z: 33 }, { x: 28, z: 33 }, { x: 28, z: 0 }] },
+        { id: 2, points: [{ x: 35, z: 32 }, { x: 0, z: 32 }] }
+      ]
+    };
+  }
+  allRoutes = routesData.routes.map(route => ({
+    id: route.id,
+    points: route.points.map(gridToWorld)
+  })).filter(route => route.points.length > 1);
+}
+
+function createCar() {
+  const group = new THREE.Group();
+  const color = [0xe23d3d, 0xf0c75e, 0x2f77c7, 0x3e9b62, 0xffffff][Math.floor(Math.random() * 5)];
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.72, 1.34), new THREE.MeshStandardMaterial({ color, roughness: 0.55 }));
+  body.position.y = 0.76;
+  body.castShadow = true;
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.58, 1.0), new THREE.MeshStandardMaterial({ color: 0xdbe9ef, roughness: 0.35 }));
+  cabin.position.set(-0.18, 1.28, 0);
+  cabin.castShadow = true;
+  group.add(body, cabin);
+  return group;
+}
+
+function spawnCar(time) {
+  if (!allRoutes.length || cars.length >= maxCars || time - lastSpawn < spawnInterval) return;
+  const route = allRoutes[routeIndex % allRoutes.length];
+  routeIndex++;
+  lastSpawn = time;
+  const car = createCar();
+  car.position.copy(route.points[0]);
+  scene.add(car);
+  cars.push({ mesh: car, route: route.points, segment: 0, t: 0, speed: 0.065 + Math.random() * 0.03, rotation: 0 });
+}
+
+function animateCars() {
+  for (let i = cars.length - 1; i >= 0; i--) {
+    const car = cars[i];
+    let start = car.route[car.segment];
+    let end = car.route[car.segment + 1];
+    const distance = start.distanceTo(end);
+    car.t += car.speed / Math.max(distance, 1);
+    if (car.t >= 1) {
+      car.segment++;
+      car.t = 0;
+      if (car.segment >= car.route.length - 1) {
+        scene.remove(car.mesh);
+        disposeObject(car.mesh);
+        cars.splice(i, 1);
+        continue;
+      }
+      start = car.route[car.segment];
+      end = car.route[car.segment + 1];
+    }
+    car.mesh.position.lerpVectors(start, end, car.t);
+    const direction = new THREE.Vector3().subVectors(end, start);
+    const targetRotation = Math.atan2(direction.x, direction.z) - Math.PI / 2;
+    car.rotation = lerp(car.rotation, targetRotation, 0.15);
+    car.mesh.rotation.y = car.rotation;
+  }
+}
+
+function updateVisualTargets(values) {
+  const pollution = clamp((values.pm25 / baseline.pm25 * 0.45) + (values.nox / baseline.nox * 0.25) + (values.stagnation / 100 * 0.30) - 0.45, 0, 1);
+  const cleaner = clamp(reduction("pm25", values) + reduction("exposure", values) * 0.45, 0, 1);
+  visualTargets.bg.set(0xd9e5d2).lerp(new THREE.Color(0x97a09b), pollution * 0.75).lerp(new THREE.Color(0xcce8d2), cleaner * 0.28);
+  visualTargets.fog.copy(visualTargets.bg).lerp(new THREE.Color(0x77706b), pollution * 0.45);
+  visualTargets.fogDensity = clamp(0.0032 + pollution * 0.010 - cleaner * 0.002, 0.002, 0.016);
+  visualTargets.sun = clamp(1.18 - pollution * 0.32, 0.76, 1.22);
+  visualTargets.ambient = clamp(0.54 - pollution * 0.18 + cleaner * 0.08, 0.32, 0.62);
+}
+
+function applyVisualTargets() {
+  scene.background.lerp(visualTargets.bg, 0.045);
+  scene.fog.color.lerp(visualTargets.fog, 0.05);
+  scene.fog.density = lerp(scene.fog.density, visualTargets.fogDensity, 0.05);
+  sun.intensity = lerp(sun.intensity, visualTargets.sun, 0.05);
+  ambient.intensity = lerp(ambient.intensity, visualTargets.ambient, 0.05);
+}
+
+function refreshCityForYear(year, force = false) {
+  if (!force && Math.abs(year - lastCityRefresh) < 0.18) return;
+  lastCityRefresh = year;
+  const p5 = selectedPolicies.has("P5") ? policyProgress(policies.find(policy => policy.code === "P5"), year) : 0;
+  const p4 = selectedPolicies.has("P4") ? policyProgress(policies.find(policy => policy.code === "P4"), year) : 0;
+  const p6 = selectedPolicies.has("P6") ? policyProgress(policies.find(policy => policy.code === "P6"), year) : 0;
+  const treeCount = Math.round(48 + p5 * 88 + p4 * 24 + p6 * 18);
+  rebuildTrees(treeCount);
+  const trafficReduction = Math.max(0, -buildEffectSums(year).sums.nox);
+  maxCars = Math.round(clamp(40 - trafficReduction * 78, 12, 44));
+  spawnInterval = Math.round(clamp(980 + trafficReduction * 2600, 680, 2800));
+}
+
+function resetSimulation() {
+  simulationRunning = false;
+  simulationStart = null;
+  currentYear = 0;
+  state.smoothed = {};
+  document.getElementById("btn-start").textContent = "Iniciar";
+  buildHistory();
+  renderPolicies();
+  updateDashboard(calculateValues(0));
+  refreshCityForYear(0, true);
+}
+
+function createReportChart(seriesKeys, values) {
+  const colors = { pm25: "#be3a34", pm10: "#b77800", co2: "#57636b", nox: "#2563a8", o3: "#047a7a", cov: "#7c4d9e", temp: "#a74322", exposure: "#1b8a5a", acceptance: "#3949ab", equity: "#00897b" };
+  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "CO₂", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temp.", exposure: "Exposición", acceptance: "Aceptación", equity: "Equidad" };
+  const w = 860;
+  const h = 260;
+  const pad = 42;
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="260"><rect width="${w}" height="${h}" fill="#fff"/><line x1="${pad}" y1="${h - pad}" x2="${w - 20}" y2="${h - pad}" stroke="#ccd3d8"/><line x1="${pad}" y1="20" x2="${pad}" y2="${h - pad}" stroke="#ccd3d8"/>`;
+  seriesKeys.forEach((key, idx) => {
+    const base = values[0][key];
+    const points = values.map(item => {
+      const x = pad + (item.year / TOTAL_YEARS) * (w - pad - 20);
+      const rel = clamp(item[key] / base, 0.25, 1.2);
+      const y = 20 + (1 - ((rel - 0.25) / 0.95)) * (h - pad - 20);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    svg += `<polyline points="${points}" fill="none" stroke="${colors[key]}" stroke-width="3"/>`;
+    svg += `<text x="${pad + idx * 82}" y="${h - 10}" fill="${colors[key]}" font-size="12" font-weight="700">${labels[key]}</text>`;
+  });
+  svg += "</svg>";
+  return svg;
+}
+
+function exportReport() {
+  buildHistory();
+  const values = state.history;
+  const initial = values[0];
+  const final = values[values.length - 1];
+  const evaluation = evaluatePlan(final);
+  const selected = getSelectedPolicies();
+  const rows = [
+    ["PM2.5", initial.pm25, final.pm25, "µg/m³", 1],
+    ["PM10", initial.pm10, final.pm10, "µg/m³", 1],
+    ["CO₂", initial.co2, final.co2, "ppm", 0],
+    ["NOx", initial.nox, final.nox, "ppb", 0],
+    ["O₃", initial.o3, final.o3, "ppb", 1],
+    ["COV", initial.cov, final.cov, "µg/m³", 1],
+    ["Temperatura", initial.temp, final.temp, "°C", 1],
+    ["Exposición", initial.exposure, final.exposure, "hab.", 0],
+    ["Aceptación", initial.acceptance, final.acceptance, "0-100", 0],
+    ["Equidad", initial.equity, final.equity, "0-100", 0]
+  ];
+  const strengths = [
+    reduction("pm25", final) >= 0.15 ? "Reducción de PM2.5 respecto al caso inicial." : null,
+    reduction("exposure", final) > 0 ? "Menor exposición poblacional acumulada." : null,
+    final.equity >= baseline.equity ? "Mejora de equidad ambiental." : null
+  ].filter(Boolean);
+  const weaknesses = evaluation.failures.map(item => item.label);
+  const report = window.open("", "_blank");
+  if (!report) return;
+  report.document.write(`
+    <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte final - Simulador de calidad de aire</title>
+    <style>
+      body{font-family:Segoe UI,Arial,sans-serif;margin:28px;color:#17202a;background:#f7f9fa}
+      h1{margin:0 0 4px;font-size:28px} h2{margin:24px 0 10px;font-size:19px}
+      .status{display:inline-block;padding:6px 10px;border-radius:999px;color:#fff;background:${evaluation.tone === "good" ? "#1b8a5a" : evaluation.tone === "bad" ? "#be3a34" : "#b77800"};font-weight:800}
+      table{width:100%;border-collapse:collapse;background:#fff;margin-top:10px} th,td{border:1px solid #d7dee2;padding:8px;text-align:left;font-size:13px} th{background:#eaf0f2}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.box{background:#fff;border:1px solid #d7dee2;border-radius:8px;padding:12px}
+      @media print{body{background:#fff;margin:14mm}.no-print{display:none}.box{break-inside:avoid}}
+    </style></head><body>
+    <button class="no-print" onclick="window.print()" style="float:right;padding:8px 12px">Guardar como PDF</button>
+    <h1>Reporte final del simulador</h1>
+    <div class="status">${evaluation.status}</div>
+    <p>Presupuesto usado: <strong>${getBudgetUsed()} / ${BUDGET}</strong>. Políticas seleccionadas: <strong>${selected.length}</strong>.</p>
+    <h2>Evolución de contaminantes</h2>
+    <div class="box">${createReportChart(["pm25", "pm10", "co2", "nox", "o3", "cov"], values)}</div>
+    <h2>Evolución social y térmica</h2>
+    <div class="box">${createReportChart(["temp", "exposure", "acceptance", "equity"], values)}</div>
+    <h2>Valores iniciales y finales</h2>
+    <table><thead><tr><th>Variable</th><th>Inicial</th><th>Final año 5</th><th>Cambio</th><th>Unidad</th></tr></thead><tbody>
+      ${rows.map(([label, start, end, unit, digits]) => `<tr><td>${label}</td><td>${fmt(start, digits)}</td><td>${fmt(end, digits)}</td><td>${fmt(((end - start) / start) * 100, 1)}%</td><td>${unit}</td></tr>`).join("")}
+    </tbody></table>
+    <div class="grid">
+      <div class="box"><h2>Fortalezas</h2><ul>${(strengths.length ? strengths : ["El plan requiere más medidas para mostrar fortalezas técnicas claras."]).map(item => `<li>${item}</li>`).join("")}</ul></div>
+      <div class="box"><h2>Debilidades</h2><ul>${(weaknesses.length ? weaknesses : ["No se identifican criterios fallidos al año 5."]).map(item => `<li>${item}</li>`).join("")}</ul></div>
+    </div>
+    <h2>Políticas seleccionadas</h2>
+    <table><thead><tr><th>Código</th><th>Política</th><th>Costo</th><th>Implementación</th><th>Degradación</th></tr></thead><tbody>
+      ${(selected.length ? selected : [{ code: "-", name: "Sin políticas seleccionadas", cost: 0, implementation: "-", degradation: null }]).map(policy => `<tr><td>${policy.code}</td><td>${policy.name}</td><td>${policy.cost}</td><td>${policy.implementation}</td><td>${policy.degradation || "NA"}</td></tr>`).join("")}
+    </tbody></table>
+    </body></html>
+  `);
+  report.document.close();
+  report.focus();
+}
+
+function animate(time) {
+  requestAnimationFrame(animate);
+  if (simulationRunning) {
+    currentYear = clamp((time - simulationStart) / YEAR_DURATION_MS, 0, TOTAL_YEARS);
+    if (currentYear >= TOTAL_YEARS) {
+      simulationRunning = false;
+      document.getElementById("btn-start").textContent = "Finalizado";
+    }
+  }
+  const values = calculateValues(currentYear);
+  updateDashboard(values);
+  refreshCityForYear(currentYear);
+  spawnCar(time);
+  animateCars();
+  applyVisualTargets();
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+document.getElementById("btn-start").addEventListener("click", () => {
+  if (simulationRunning) {
+    simulationRunning = false;
+    document.getElementById("btn-start").textContent = "Continuar";
+    return;
+  }
+  if (currentYear >= TOTAL_YEARS) {
+    currentYear = 0;
+    state.smoothed = {};
+  }
+  simulationStart = performance.now() - (currentYear * YEAR_DURATION_MS);
+  simulationRunning = true;
+  document.getElementById("btn-start").textContent = "Pausar";
+});
+
+document.getElementById("btn-reset").addEventListener("click", resetSimulation);
+document.getElementById("btn-report").addEventListener("click", exportReport);
+
+window.addEventListener("resize", () => {
+  const a = window.innerWidth / window.innerHeight;
+  camera.left = -cameraSize * a;
+  camera.right = cameraSize * a;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+buildRoadNetwork();
+buildBuildings();
+await loadRoutes();
+resetSimulation();
+animate(0);
+</script>
+</body>
+</html>
