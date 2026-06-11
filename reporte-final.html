@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte final</title>
+</head>
+<body>
+<script>
+const html = localStorage.getItem("simuladorAireReporte");
+document.open();
+document.write(html || `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte no disponible</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;color:#17202a;background:#f7f9fa}
+main{max-width:620px;background:#fff;border:1px solid #d7dee2;border-radius:8px;padding:28px}
+a{display:inline-flex;margin-top:12px;padding:10px 14px;border-radius:7px;color:#fff;background:#1b8a5a;text-decoration:none;font-weight:800}
+</style></head><body><main><h1>Reporte no disponible</h1><p>Completa los 5 años de simulación para generar el reporte final.</p><a href="index.html">Volver al simulador</a></main></body></html>`);
+document.close();
+</script>
+</body>
+</html>
