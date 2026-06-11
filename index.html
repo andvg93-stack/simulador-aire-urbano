@@ -589,14 +589,14 @@ const baseline = {
 
 const policies = [
   { code: "P1", name: "Zona de bajas emisiones", cost: 35, implementation: 3, degradation: null, acceptance: -12, equity: 8, description: "Restringe vehículos altamente contaminantes en el centro.", effects: { pm25: -0.18, pm10: -0.12, nox: -0.25, cov: -0.08, co2: -0.10, temp: 0, wind: 0, hmix: 0, exposure: -0.12 } },
-  { code: "P2", name: "Buses eléctricos o de baja emisión", cost: 45, implementation: 5, degradation: null, acceptance: 5, equity: 12, description: "Reduce emisiones del transporte público.", effects: { pm25: -0.15, pm10: -0.08, nox: -0.30, cov: -0.04, co2: -0.12, temp: 0, wind: 0, hmix: 0, exposure: -0.10 } },
-  { code: "P3", name: "Restricción vehicular parcial", cost: 0, implementation: 1, degradation: null, acceptance: -15, equity: -5, description: "Reduce temporalmente circulación de vehículos particulares.", effects: { pm25: -0.12, pm10: -0.08, nox: -0.15, cov: -0.06, co2: -0.08, temp: 0, wind: 0, hmix: 0, exposure: -0.08 } },
-  { code: "P4", name: "Ciclorrutas y vías peatonales", cost: 25, implementation: 3, degradation: null, acceptance: 8, equity: 10, description: "Disminuye viajes cortos motorizados.", effects: { pm25: -0.08, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.07, temp: -0.2, wind: 0, hmix: 0, exposure: -0.06 } },
-  { code: "P5", name: "Arborización urbana técnica", cost: 20, implementation: 5, degradation: null, acceptance: 12, equity: 8, description: "Aumenta cobertura vegetal y reduce isla de calor.", effects: { pm25: -0.05, pm10: -0.08, nox: 0, cov: -0.02, co2: -0.03, temp: -1.1, wind: 0, hmix: 0.05, exposure: -0.07 } },
+  { code: "P2", name: "Buses eléctricos o de baja emisión", cost: 45, implementation: 5, degradation: null, acceptance: 5, equity: 12, description: "Reduce emisiones del transporte público.", effects: { pm25: -0.18, pm10: -0.10, nox: -0.35, cov: -0.04, co2: -0.15, temp: 0, wind: 0, hmix: 0, exposure: -0.12 } },
+  { code: "P3", name: "Restricción vehicular parcial", cost: 15, implementation: 1, degradation: null, acceptance: -20, equity: -8, description: "Reduce temporalmente circulación de vehículos particulares.", effects: { pm25: -0.08, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.05, temp: 0, wind: 0, hmix: 0, exposure: -0.05 } },
+  { code: "P4", name: "Ciclorrutas y vías peatonales", cost: 30, implementation: 3, degradation: null, acceptance: 8, equity: 10, description: "Disminuye viajes cortos motorizados.", effects: { pm25: -0.08, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.07, temp: -0.2, wind: 0, hmix: 0, exposure: -0.06 } },
+  { code: "P5", name: "Arborización urbana técnica", cost: 25, implementation: 5, degradation: null, acceptance: 12, equity: 8, description: "Aumenta cobertura vegetal y reduce isla de calor.", effects: { pm25: -0.05, pm10: -0.08, nox: 0, cov: -0.02, co2: -0.03, temp: -1.1, wind: 0, hmix: 0.05, exposure: -0.07 } },
   { code: "P6", name: "Corredores urbanos de ventilación", cost: 30, implementation: 5, degradation: null, acceptance: -5, equity: 6, description: "Reduce bloqueo del flujo de aire en zonas densas.", effects: { pm25: -0.10, pm10: -0.10, nox: -0.08, cov: -0.06, co2: 0, temp: -0.4, wind: 0.18, hmix: 0.15, exposure: -0.10 } },
-  { code: "P7", name: "Control de obras y polvo", cost: 15, implementation: 1, degradation: 2, acceptance: 4, equity: 4, description: "Reduce PM10 por obras, vías destapadas y material particulado grueso.", effects: { pm25: -0.02, pm10: -0.22, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.04 } },
-  { code: "P8", name: "Control de COV", cost: 25, implementation: 3, degradation: 2, acceptance: -4, equity: 3, description: "Reduce precursores de ozono en comercio e industria liviana.", effects: { pm25: -0.03, pm10: -0.02, nox: 0, cov: -0.30, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.03 } },
-  { code: "P9", name: "Teletrabajo y horarios escalonados", cost: 10, implementation: 1, degradation: 1, acceptance: 2, equity: -2, description: "Reduce congestión en horas pico.", effects: { pm25: -0.07, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.06, temp: 0, wind: 0, hmix: 0, exposure: -0.06 } },
+  { code: "P7", name: "Control de obras y polvo", cost: 15, implementation: 1, degradation: 7, acceptance: 4, equity: 4, description: "Reduce PM10 por obras, vías destapadas y material particulado grueso.", effects: { pm25: -0.02, pm10: -0.22, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.04 } },
+  { code: "P8", name: "Control de COV", cost: 20, implementation: 3, degradation: 5, acceptance: -4, equity: 3, description: "Reduce precursores de ozono en comercio e industria liviana.", effects: { pm25: -0.03, pm10: -0.02, nox: 0, cov: -0.35, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.05 } },
+  { code: "P9", name: "Teletrabajo y horarios escalonados", cost: 10, implementation: 1, degradation: 6, acceptance: 5, equity: 2, description: "Reduce congestión en horas pico.", effects: { pm25: -0.06, pm10: -0.04, nox: -0.08, cov: -0.03, co2: -0.05, temp: 0, wind: 0, hmix: 0, exposure: -0.10 } },
   { code: "P10", name: "Alertas y gestión de exposición", cost: 10, implementation: 1, degradation: 1, acceptance: 10, equity: 15, description: "Reduce exposición de población vulnerable sin reducir emisiones.", effects: { pm25: 0, pm10: 0, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.18 } }
 ];
 
@@ -799,11 +799,12 @@ function reduction(key, values) {
 function evaluatePlan(values) {
   const budgetOk = getBudgetUsed() <= BUDGET;
   const criteria = [
-    { label: "PM2.5", pass: reduction("pm25", values) >= 0.25 },
+    { label: "PM2.5", pass: reduction("pm25", values) >= 0.30 },
     { label: "PM10", pass: reduction("pm10", values) >= 0.20 },
-    { label: "NOx", pass: reduction("nox", values) >= 0.20 },
+    { label: "NOx", pass: reduction("nox", values) >= 0.25 },
     { label: "Exposición", pass: reduction("exposure", values) >= 0.20 },
     { label: "Aceptación", pass: values.acceptance >= 50 },
+    { label: "Equidad interna", pass: values.equity >= 55, internal: true },
     { label: "O₃", pass: ((values.o3 - baseline.o3) / baseline.o3) <= 0.05 }
   ];
   const failures = criteria.filter(item => !item.pass);
@@ -815,7 +816,8 @@ function evaluatePlan(values) {
     !budgetOk ||
     o3Increase > 0.10 ||
     values.acceptance < 40 ||
-    reduction("pm25", values) < 0.15 ||
+    reduction("pm25", values) < 0.18 ||
+    reduction("nox", values) < 0.12 ||
     reduction("exposure", values) <= 0
   ) {
     status = "No aceptable";
@@ -2339,7 +2341,18 @@ function buildReportHtml() {
     reduction("pm25", final) >= 0.15 ? "Reducción de PM2.5 respecto al caso inicial." : null,
     reduction("exposure", final) > 0 ? "Menor exposición poblacional acumulada." : null
   ].filter(Boolean);
-  const weaknesses = evaluation.failures.map(item => item.label);
+  const weaknesses = evaluation.failures.filter(item => !item.internal).map(item => item.label);
+  const hiddenWeaknessCount = evaluation.failures.length - weaknesses.length;
+  const diagnosticText = weaknesses.length
+    ? `Fortalezas: reducción acumulada de emisiones y exposición según políticas activas. Debilidades pendientes: ${weaknesses.join(", ")}.`
+    : (hiddenWeaknessCount > 0
+      ? "El plan mejora los indicadores visibles, pero no cumple todos los criterios internos de balance técnico."
+      : "El plan cumple presupuesto, metas ambientales y aceptación al cierre del año 5.");
+  const weaknessItems = weaknesses.length
+    ? weaknesses
+    : (hiddenWeaknessCount > 0
+      ? ["No cumple todos los criterios internos de balance técnico."]
+      : ["No se identifican criterios fallidos al año 5."]);
 
   return `
     <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte final - Simulador de calidad de aire</title>
@@ -2356,7 +2369,7 @@ function buildReportHtml() {
     <div class="status">${evaluation.status}</div>
     <p>Presupuesto usado: <strong>${getBudgetUsed()} / ${BUDGET}</strong>. Políticas implementadas: <strong>${implemented.length}</strong>.</p>
     <h2>Diagnóstico técnico</h2>
-    <p>${weaknesses.length ? `Fortalezas: reducción acumulada de emisiones y exposición según políticas activas. Debilidades pendientes: ${weaknesses.join(", ")}.` : "El plan cumple presupuesto, metas ambientales y aceptación al cierre del año 5."}</p>
+    <p>${diagnosticText}</p>
     <h2>Evolución de contaminantes</h2>
     <div class="box">${createReportChart(["pm25", "pm10", "co2", "nox", "o3", "cov"], values)}</div>
     <h2>Evolución social y térmica</h2>
@@ -2367,7 +2380,7 @@ function buildReportHtml() {
     </tbody></table>
     <div class="grid">
       <div class="box"><h2>Fortalezas</h2><ul>${(strengths.length ? strengths : ["El plan requiere más medidas para mostrar fortalezas técnicas claras."]).map(item => `<li>${item}</li>`).join("")}</ul></div>
-      <div class="box"><h2>Debilidades</h2><ul>${(weaknesses.length ? weaknesses : ["No se identifican criterios fallidos al año 5."]).map(item => `<li>${item}</li>`).join("")}</ul></div>
+      <div class="box"><h2>Debilidades</h2><ul>${weaknessItems.map(item => `<li>${item}</li>`).join("")}</ul></div>
     </div>
     <h2>Políticas implementadas</h2>
     <table><thead><tr><th>Código</th><th>Política</th><th>Costo</th><th>Inicio</th><th>Culmina</th><th>Cambio visible</th></tr></thead><tbody>

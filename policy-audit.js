@@ -106,11 +106,12 @@ function evaluatePlan(model, selectedPolicies, values) {
   const cost = selectedPolicies.reduce((total, policy) => total + policy.cost, 0);
   const budgetOk = cost <= model.budget;
   const criteria = [
-    { label: "PM2.5", pass: reduction(model, "pm25", values) >= 0.25 },
+    { label: "PM2.5", pass: reduction(model, "pm25", values) >= 0.30 },
     { label: "PM10", pass: reduction(model, "pm10", values) >= 0.20 },
-    { label: "NOx", pass: reduction(model, "nox", values) >= 0.20 },
+    { label: "NOx", pass: reduction(model, "nox", values) >= 0.25 },
     { label: "Exposicion", pass: reduction(model, "exposure", values) >= 0.20 },
     { label: "Aceptacion", pass: values.acceptance >= 50 },
+    { label: "Equidad interna", pass: values.equity >= 55, internal: true },
     { label: "O3", pass: ((values.o3 - model.baseline.o3) / model.baseline.o3) <= 0.05 }
   ];
   const failures = criteria.filter(item => !item.pass);
@@ -122,7 +123,8 @@ function evaluatePlan(model, selectedPolicies, values) {
     !budgetOk ||
     o3Increase > 0.10 ||
     values.acceptance < 40 ||
-    reduction(model, "pm25", values) < 0.15 ||
+    reduction(model, "pm25", values) < 0.18 ||
+    reduction(model, "nox", values) < 0.12 ||
     reduction(model, "exposure", values) <= 0
   ) {
     status = "No aceptable";
@@ -178,6 +180,7 @@ function evaluateCombination(model, combo, year = model.totalYears) {
       cov: final.cov,
       exposure: final.exposure,
       acceptance: final.acceptance,
+      equity: final.equity,
       vent: final.vent,
       stagnation: final.stagnation
     },
@@ -186,7 +189,8 @@ function evaluateCombination(model, combo, year = model.totalYears) {
       pm10: reduction(model, "pm10", final),
       nox: reduction(model, "nox", final),
       exposure: reduction(model, "exposure", final),
-      cov: reduction(model, "cov", final)
+      cov: reduction(model, "cov", final),
+      equityChange: final.equity - model.baseline.equity
     }
   };
 }
@@ -233,13 +237,37 @@ function countStatuses(items) {
   };
 }
 
-function buildIntentChecks(model) {
+function buildIntentChecks(model, evaluations, marginal) {
   const finalSingle = model.policies.map(policy => evaluateCombination(model, [policy]));
   const peakSingle = model.policies.map(policy => evaluateCombination(model, [policy], policy.implementation));
   const byCode = Object.fromEntries(peakSingle.map(item => [item.codes[0], item]));
   const byCodeFinal = Object.fromEntries(finalSingle.map(item => [item.codes[0], item]));
+  const marginalByCode = Object.fromEntries(marginal.map(item => [item.code, item]));
+  const acceptablePlans = evaluations.filter(item => item.status === "Aceptable");
+  const p3AcceptableShare = acceptablePlans.length
+    ? acceptablePlans.filter(item => item.codes.includes("P3")).length / acceptablePlans.length
+    : 0;
+  const byCodes = new Map(evaluations.map(item => [item.codes.join(","), item]));
+  const p10MasksBadEmissions = evaluations.some(base => {
+    if (base.codes.includes("P10") || base.codes.length >= model.maxPolicies) return false;
+    const comboPolicies = base.codes.map(code => model.policies.find(policy => policy.code === code));
+    const p10 = model.policies.find(policy => policy.code === "P10");
+    const candidateCost = comboPolicies.reduce((total, item) => total + item.cost, 0) + p10.cost;
+    if (candidateCost > model.budget) return false;
+    const candidate = byCodes.get([...base.codes, "P10"].sort().join(","));
+    return Boolean(
+      candidate &&
+      candidate.status === "Aceptable" &&
+      (base.reductions.pm25 < 0.18 || base.reductions.nox < 0.12)
+    );
+  });
   const maxPm10Single = peakSingle.reduce((best, item) => item.reductions.pm10 > best.reductions.pm10 ? item : best, peakSingle[0]);
   return [
+    {
+      check: "P3 no domina los planes aceptables",
+      pass: p3AcceptableShare < 0.70,
+      evidence: `P3 aparece en ${fmt(p3AcceptableShare * 100)}% de planes aceptables`
+    },
     {
       check: "P7 impacta especialmente PM10",
       pass: maxPm10Single.codes[0] === "P7",
@@ -256,6 +284,11 @@ function buildIntentChecks(model) {
       evidence: `Exposicion ${fmt(byCode.P10.reductions.exposure * 100)}%, PM2.5 ${fmt(byCode.P10.reductions.pm25 * 100)}%, NOx ${fmt(byCode.P10.reductions.nox * 100)}% al efecto completo`
     },
     {
+      check: "P10 no maquilla planes sin reduccion minima de emisiones",
+      pass: !p10MasksBadEmissions,
+      evidence: p10MasksBadEmissions ? "Existe al menos un plan que P10 vuelve aceptable sin minimo de PM2.5 o NOx" : "Ningun plan aceptable depende de P10 para ocultar emisiones insuficientes"
+    },
+    {
       check: "P6 mejora ventilacion y estancamiento",
       pass: byCode.P6.values.vent > model.baseline.vent && byCode.P6.values.stagnation < model.baseline.stagnation,
       evidence: `Vent ${fmt(byCode.P6.values.vent, 0)} vs ${model.baseline.vent}; estancamiento ${fmt(byCode.P6.values.stagnation, 0)} vs ${model.baseline.stagnation}`
@@ -264,6 +297,11 @@ function buildIntentChecks(model) {
       check: "P3 reduce emisiones y penaliza aceptacion",
       pass: byCode.P3.reductions.pm25 > 0.05 && byCode.P3.values.acceptance < model.baseline.acceptance,
       evidence: `PM2.5 ${fmt(byCode.P3.reductions.pm25 * 100)}%, aceptacion ${fmt(byCode.P3.values.acceptance, 0)}`
+    },
+    {
+      check: "P7, P8 y P9 ganan peso marginal",
+      pass: marginalByCode.P7.marginal.improves > 25 && marginalByCode.P8.marginal.improves > 9 && marginalByCode.P9.marginal.improves > 15,
+      evidence: `Mejoras P7 ${marginalByCode.P7.marginal.improves}, P8 ${marginalByCode.P8.marginal.improves}, P9 ${marginalByCode.P9.marginal.improves}`
     }
   ];
 }
@@ -279,10 +317,11 @@ function buildBalanceFindings(model, evaluations, marginal) {
   return {
     hasAcceptablePlan: acceptable.length > 0,
     acceptablePlanCount: acceptable.length,
+    acceptableRatio: evaluations.length ? acceptable.length / evaluations.length : 0,
     singlePolicyAcceptable: singleAcceptable.map(item => item.codes[0]),
     poisonPolicies: poison,
     alwaysWinPolicies: alwaysWin,
-    tooManyAcceptableWarning: acceptable.length > evaluations.length * 0.35
+    tooManyAcceptableWarning: acceptable.length > evaluations.length * 0.25
   };
 }
 
@@ -310,6 +349,9 @@ function buildCsv(evaluations) {
     "exposicion_final",
     "exposicion_reduccion_pct",
     "aceptacion_final",
+    "equidad_interna_final",
+    "equidad_interna_cambio_pts",
+    "equidad_interna_ok",
     "ventilacion_final",
     "estancamiento_final"
   ];
@@ -330,6 +372,9 @@ function buildCsv(evaluations) {
     plan.values.exposure.toFixed(0),
     (plan.reductions.exposure * 100).toFixed(2),
     plan.values.acceptance.toFixed(2),
+    plan.values.equity.toFixed(2),
+    plan.reductions.equityChange.toFixed(2),
+    plan.values.equity >= 55 ? "si" : "no",
     plan.values.vent.toFixed(2),
     plan.values.stagnation.toFixed(2)
   ]);
@@ -348,19 +393,21 @@ function buildMarkdown(report) {
   lines.push(`- Aceptables: ${report.summary.statusCounts.aceptable}`);
   lines.push(`- Parcialmente aceptables: ${report.summary.statusCounts.parcial}`);
   lines.push(`- No aceptables: ${report.summary.statusCounts.noAceptable}`);
+  lines.push(`- Porcentaje aceptable: ${fmt(report.balanceFindings.acceptableRatio * 100)}%`);
   lines.push(`- Existe plan aceptable: ${report.balanceFindings.hasAcceptablePlan ? "si" : "no"}`);
   lines.push(`- Politicas aceptables por si solas: ${report.balanceFindings.singlePolicyAcceptable.join(", ") || "ninguna"}`);
   lines.push(`- Politicas veneno: ${report.balanceFindings.poisonPolicies.join(", ") || "ninguna"}`);
   lines.push(`- Politicas boton de ganar: ${report.balanceFindings.alwaysWinPolicies.join(", ") || "ninguna"}`);
+  lines.push(`- Advertencia por demasiados aceptables: ${report.balanceFindings.tooManyAcceptableWarning ? "si" : "no"}`);
   lines.push("");
   lines.push("## Mejores planes aceptables");
   lines.push("");
-  lines.push("| Politicas | Costo | PM2.5 | PM10 | NOx | Exposicion | Aceptacion | Fallas |");
-  lines.push("|---|---:|---:|---:|---:|---:|---:|---|");
+  lines.push("| Politicas | Costo | PM2.5 | PM10 | NOx | Exposicion | Aceptacion | Equidad int. | Fallas |");
+  lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---|");
   report.bestAcceptablePlans.forEach(plan => {
-    lines.push(`| ${plan.codes.join("+")} | ${plan.cost} | ${fmt(plan.reductions.pm25 * 100)}% | ${fmt(plan.reductions.pm10 * 100)}% | ${fmt(plan.reductions.nox * 100)}% | ${fmt(plan.reductions.exposure * 100)}% | ${fmt(plan.values.acceptance, 0)} | ${plan.failures.join(", ") || "-"} |`);
+    lines.push(`| ${plan.codes.join("+")} | ${plan.cost} | ${fmt(plan.reductions.pm25 * 100)}% | ${fmt(plan.reductions.pm10 * 100)}% | ${fmt(plan.reductions.nox * 100)}% | ${fmt(plan.reductions.exposure * 100)}% | ${fmt(plan.values.acceptance, 0)} | ${fmt(plan.values.equity, 0)} | ${plan.failures.join(", ") || "-"} |`);
   });
-  if (!report.bestAcceptablePlans.length) lines.push("| - | - | - | - | - | - | - | - |");
+  if (!report.bestAcceptablePlans.length) lines.push("| - | - | - | - | - | - | - | - | - |");
   lines.push("");
   lines.push("## Analisis marginal");
   lines.push("");
@@ -412,7 +459,7 @@ function main() {
       statusCounts: countStatuses(evaluations)
     },
     balanceFindings: buildBalanceFindings(model, evaluations, marginal),
-    intentChecks: buildIntentChecks(model),
+    intentChecks: buildIntentChecks(model, evaluations, marginal),
     marginal,
     bestAcceptablePlans: acceptablePlans.slice(0, 12),
     acceptablePlans,
@@ -434,6 +481,9 @@ function main() {
   }
   if (report.balanceFindings.alwaysWinPolicies.length) {
     console.log(`REVISAR: politicas boton de ganar: ${report.balanceFindings.alwaysWinPolicies.join(", ")}`);
+  }
+  if (report.balanceFindings.tooManyAcceptableWarning) {
+    console.log(`REVISAR: demasiados planes aceptables (${fmt(report.balanceFindings.acceptableRatio * 100)}%).`);
   }
   report.intentChecks
     .filter(item => !item.pass)
