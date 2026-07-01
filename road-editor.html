@@ -130,6 +130,8 @@
   .point { fill: #fff; stroke: #17202a; stroke-width: 1.4; cursor: pointer; }
   .point.selected { fill: #f4d35e; stroke-width: 2.2; }
   .zebra-hit { fill: rgba(37,99,168,.16); stroke: #2563a8; stroke-width: 1; cursor: pointer; }
+  .zebra-hit.selected { stroke: #f4d35e; stroke-width: 1.8; }
+  .zebra-slot { fill: rgba(255,255,255,.04); stroke: rgba(37,99,168,.32); stroke-width: .7; stroke-dasharray: 1.2 1.2; cursor: pointer; }
   .land-cell { stroke: rgba(23,32,42,.16); stroke-width: .45; cursor: pointer; }
   .land-building { fill: rgba(120, 148, 160, .55); }
   .land-tree { fill: rgba(27, 138, 90, .48); }
@@ -154,7 +156,7 @@
 <main>
   <section class="panel tools">
     <h1>Editor vial</h1>
-    <p>Une puntos de la grilla 5x5 para definir calles. En modo cebras, haz clic en un punto para agregar o seleccionar una zebra peatonal.</p>
+    <p>Une puntos de la grilla 5x5 para definir calles. En modo cebras, haz clic en una aproximación de calle para agregar o quitar una zebra peatonal.</p>
 
     <div class="segmented">
       <button id="mode-road" class="active" type="button">Calles</button>
@@ -170,9 +172,6 @@
 
     <label for="zebra-length"><strong>Longitud de líneas blancas</strong>: <span id="zebra-length-value">5.4</span></label>
     <input id="zebra-length" type="range" min="1.5" max="14" step="0.1">
-
-    <label for="zebra-rotation"><strong>Rotación zebra seleccionada</strong>: <span id="zebra-rotation-value">0</span>°</label>
-    <input id="zebra-rotation" type="range" min="-90" max="90" step="5">
 
     <div class="actions">
       <button id="btn-save" class="primary" type="button">Guardar en simulación</button>
@@ -201,17 +200,23 @@ const ROAD_LAYOUT_KEY = "simuladorAireRoadLayout";
 const GRID_X = [-48, -24, 0, 24, 48];
 const GRID_Z = [-44, -20, 4, 28, 52];
 const GREEN_ZONE = { x: -36, z: 40, width: 38.8, depth: 18.8 };
+const ROAD_WIDTH = 6.6;
 const LAND_USE_COLS = 12;
 const LAND_USE_ROWS = 12;
 const LAND_USE_MIN = -60;
 const LAND_USE_CELL = 10;
+const CROSSWALK_DIRECTIONS = [
+  { name: "north", dc: 0, dr: 1 },
+  { name: "south", dc: 0, dr: -1 },
+  { name: "east", dc: 1, dr: 0 },
+  { name: "west", dc: -1, dr: 0 }
+];
+const CROSSWALK_OFFSET = 6.1;
 const svg = document.getElementById("editor");
 const statusEl = document.getElementById("status");
 const jsonBox = document.getElementById("json-box");
 const lengthInput = document.getElementById("zebra-length");
 const lengthValue = document.getElementById("zebra-length-value");
-const rotationInput = document.getElementById("zebra-rotation");
-const rotationValue = document.getElementById("zebra-rotation-value");
 
 let mode = "road";
 let landBrush = "building";
@@ -235,9 +240,7 @@ function defaultEdges() {
 }
 
 function defaultZebras() {
-  const zebras = [];
-  [1, 2, 3].forEach(col => [1, 2, 3].forEach(row => zebras.push({ col, row, rotation: 0 })));
-  return zebras;
+  return [1, 2, 3].flatMap(col => [1, 2, 3].map(row => ({ col, row })));
 }
 
 function isInGreenZone(x, z, padding = 0) {
@@ -280,16 +283,55 @@ function normalizeLayout(raw) {
     edgeMap.set(edgeKey(normalized), normalized);
   });
   return {
-    version: 1,
+    version: 2,
     zebraLength: clamp(Number(raw?.zebraLength || 5.4), 1.5, 14),
     edges: [...edgeMap.values()],
-    zebras: (raw?.zebras || defaultZebras()).map(zebra => ({
-      col: clamp(Math.round(zebra.col ?? 0), 0, GRID_X.length - 1),
-      row: clamp(Math.round(zebra.row ?? 0), 0, GRID_Z.length - 1),
-      rotation: clamp(Number(zebra.rotation || 0), -90, 90)
-    })),
+    zebras: normalizeZebras(raw?.zebras, edgeMap),
     landUse: normalizeLandUse(raw?.landUse)
   };
+}
+
+function directionDef(direction) {
+  return CROSSWALK_DIRECTIONS.find(item => item.name === direction);
+}
+
+function crosswalkKey(crosswalk) {
+  return `${crosswalk.col},${crosswalk.row},${crosswalk.direction}`;
+}
+
+function edgeMapHasConnection(edgeMap, point, direction) {
+  const def = directionDef(direction);
+  if (!def) return false;
+  const neighbor = { col: point.col + def.dc, row: point.row + def.dr };
+  if (neighbor.col < 0 || neighbor.col >= GRID_X.length || neighbor.row < 0 || neighbor.row >= GRID_Z.length) return false;
+  const normalized = normalizeEdge({ a: point, b: neighbor });
+  return normalized ? edgeMap.has(edgeKey(normalized)) : false;
+}
+
+function connectedCrosswalkDirections(point, edgeMap) {
+  return CROSSWALK_DIRECTIONS
+    .filter(direction => edgeMapHasConnection(edgeMap, point, direction.name))
+    .map(direction => direction.name);
+}
+
+function normalizeZebras(rawZebras, edgeMap) {
+  const source = Array.isArray(rawZebras) ? rawZebras : defaultZebras();
+  const zebraMap = new Map();
+  source.forEach(zebra => {
+    const point = {
+      col: clamp(Math.round(zebra.col ?? 0), 0, GRID_X.length - 1),
+      row: clamp(Math.round(zebra.row ?? 0), 0, GRID_Z.length - 1)
+    };
+    const directions = directionDef(zebra.direction)
+      ? [zebra.direction]
+      : connectedCrosswalkDirections(point, edgeMap);
+    directions.forEach(direction => {
+      if (!edgeMapHasConnection(edgeMap, point, direction)) return;
+      const normalized = { ...point, direction };
+      zebraMap.set(crosswalkKey(normalized), normalized);
+    });
+  });
+  return [...zebraMap.values()].sort((a, b) => a.row - b.row || a.col - b.col || a.direction.localeCompare(b.direction));
 }
 
 function normalizeLandUse(rawLandUse) {
@@ -335,10 +377,6 @@ function setStatus(text) {
 function syncControls() {
   lengthInput.value = layout.zebraLength;
   lengthValue.textContent = Number(layout.zebraLength).toFixed(1);
-  const zebra = layout.zebras.find(item => pointKey(item) === selectedZebra);
-  rotationInput.disabled = !zebra;
-  rotationInput.value = zebra ? zebra.rotation : 0;
-  rotationValue.textContent = zebra ? zebra.rotation : 0;
   jsonBox.value = JSON.stringify(layout, null, 2);
 }
 
@@ -376,7 +414,7 @@ function draw() {
     svg.appendChild(svgEl("line", { class: "lane", x1: a.x, y1: a.z, x2: b.x, y2: b.z }));
   });
 
-  layout.zebras.forEach(zebra => drawZebra(zebra));
+  drawCrosswalkApproaches();
 
   GRID_Z.forEach((_, row) => {
     GRID_X.forEach((_, col) => {
@@ -390,7 +428,7 @@ function draw() {
   syncControls();
 }
 
-function drawZebra(zebra) {
+function drawLegacyZebra(zebra) {
   const p = pointWorld(zebra);
   const group = svgEl("g", { transform: `translate(${p.x} ${p.z}) rotate(${zebra.rotation})` });
   const hit = svgEl("rect", { class: "zebra-hit", x: -6.2, y: -6.2, width: 12.4, height: 12.4, rx: 1 });
@@ -415,13 +453,73 @@ function drawZebra(zebra) {
   svg.appendChild(group);
 }
 
+function crosswalkTransform(crosswalk) {
+  const def = directionDef(crosswalk.direction);
+  const p = pointWorld(crosswalk);
+  return {
+    x: p.x + (def?.dc || 0) * CROSSWALK_OFFSET,
+    z: p.z + (def?.dr || 0) * CROSSWALK_OFFSET,
+    rotation: crosswalk.direction === "east" || crosswalk.direction === "west" ? 90 : 0
+  };
+}
+
+function crosswalkApproaches() {
+  const edgeMap = new Map(layout.edges.map(edge => [edgeKey(edge), edge]));
+  const approaches = [];
+  layout.edges.forEach(edge => {
+    [edge.a, edge.b].forEach(point => {
+      connectedCrosswalkDirections(point, edgeMap).forEach(direction => approaches.push({ ...point, direction }));
+    });
+  });
+  const unique = new Map();
+  approaches.forEach(approach => unique.set(crosswalkKey(approach), approach));
+  return [...unique.values()].sort((a, b) => a.row - b.row || a.col - b.col || a.direction.localeCompare(b.direction));
+}
+
+function drawCrosswalkApproaches() {
+  const active = new Set(layout.zebras.map(crosswalkKey));
+  crosswalkApproaches().forEach(approach => drawZebra(approach, active.has(crosswalkKey(approach))));
+}
+
+function drawZebra(zebra, active) {
+  const transform = crosswalkTransform(zebra);
+  const safeLength = Math.min(layout.zebraLength, ROAD_WIDTH - 0.6);
+  const group = svgEl("g", { transform: `translate(${transform.x} ${transform.z}) rotate(${transform.rotation})` });
+  const selected = selectedZebra === crosswalkKey(zebra);
+  const hit = svgEl("rect", {
+    class: active ? `zebra-hit${selected ? " selected" : ""}` : "zebra-slot",
+    x: -safeLength / 2 - 0.4,
+    y: -2.8,
+    width: safeLength + 0.8,
+    height: 5.6,
+    rx: 0.8
+  });
+  hit.addEventListener("click", event => {
+    event.stopPropagation();
+    toggleZebra(zebra);
+  });
+  group.appendChild(hit);
+  if (active) {
+    for (let i = -2; i <= 2; i++) {
+      group.appendChild(svgEl("rect", {
+        class: "zebra-stripe",
+        x: -safeLength / 2,
+        y: i * 1.05 - 0.25,
+        width: safeLength,
+        height: 0.5
+      }));
+    }
+  }
+  svg.appendChild(group);
+}
+
 function svgEl(name, attrs) {
   const element = document.createElementNS("http://www.w3.org/2000/svg", name);
   Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, value));
   return element;
 }
 
-function handlePoint(point) {
+function handleLegacyPoint(point) {
   if (mode === "land") return;
   if (mode === "zebra") {
     const key = pointKey(point);
@@ -434,7 +532,7 @@ function handlePoint(point) {
       selectedZebra = key;
       setStatus("Zebra seleccionada. Ajusta su rotación.");
     } else {
-      layout.zebras.push({ ...point, rotation: Number(rotationInput.value || 0) });
+      layout.zebras.push({ ...point, direction: "east" });
       selectedZebra = key;
       setStatus("Zebra agregada.");
     }
@@ -465,6 +563,59 @@ function handlePoint(point) {
     layout.edges.push(edge);
     setStatus("Calle agregada.");
   }
+  draw();
+}
+
+function handlePoint(point) {
+  if (mode === "land") return;
+  if (mode === "zebra") {
+    setStatus("Haz clic en una aproximaciÃ³n de calle para agregar o quitar una zebra.");
+    return;
+  }
+
+  if (!selectedPoint) {
+    selectedPoint = point;
+    setStatus("Selecciona otro punto de la misma fila o columna.");
+    draw();
+    return;
+  }
+
+  const edge = normalizeEdge({ a: selectedPoint, b: point });
+  selectedPoint = null;
+  if (!edge) {
+    setStatus("La calle debe unir dos puntos distintos en lÃ­nea recta.");
+    draw();
+    return;
+  }
+  const key = edgeKey(edge);
+  const index = layout.edges.findIndex(item => edgeKey(item) === key);
+  if (index >= 0) {
+    layout.edges.splice(index, 1);
+    layout = normalizeLayout(layout);
+    setStatus("Calle eliminada.");
+  } else {
+    layout.edges.push(edge);
+    layout = normalizeLayout(layout);
+    setStatus("Calle agregada.");
+  }
+  draw();
+}
+
+function toggleZebra(zebra) {
+  mode = "zebra";
+  const key = crosswalkKey(zebra);
+  const index = layout.zebras.findIndex(item => crosswalkKey(item) === key);
+  if (index >= 0) {
+    layout.zebras.splice(index, 1);
+    selectedZebra = null;
+    setStatus("Zebra eliminada.");
+  } else {
+    layout.zebras.push({ col: zebra.col, row: zebra.row, direction: zebra.direction });
+    selectedZebra = key;
+    setStatus("Zebra agregada antes de la intersecciÃ³n.");
+  }
+  layout = normalizeLayout(layout);
+  updateModeButtons();
   draw();
 }
 
@@ -508,7 +659,7 @@ document.getElementById("mode-zebra").addEventListener("click", () => {
   mode = "zebra";
   selectedPoint = null;
   updateModeButtons();
-  setStatus("Haz clic en un punto para agregar, seleccionar o quitar una zebra.");
+  setStatus("Haz clic en una aproximaciÃ³n de calle para agregar o quitar una zebra.");
   draw();
 });
 
@@ -550,13 +701,6 @@ svg.addEventListener("click", event => {
 
 lengthInput.addEventListener("input", () => {
   layout.zebraLength = Number(lengthInput.value);
-  draw();
-});
-
-rotationInput.addEventListener("input", () => {
-  const zebra = layout.zebras.find(item => pointKey(item) === selectedZebra);
-  if (!zebra) return;
-  zebra.rotation = Number(rotationInput.value);
   draw();
 });
 

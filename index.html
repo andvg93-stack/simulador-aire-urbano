@@ -624,6 +624,7 @@ let simulationTargetYear = 1;
 let currentYear = 0;
 let routesData = null;
 let allRoutes = [];
+let trafficGraph = null;
 let lastCityRefresh = -1;
 let reportSignature = "";
 
@@ -1140,7 +1141,6 @@ let maxBuses = 0;
 let maxBikes = 0;
 let spawnInterval = 360;
 let lastSpawn = 0;
-let routeIndex = 0;
 let treeSlotIndex = 0;
 let buildingSeedData = [];
 let lastPolicyVisualKey = "";
@@ -1156,6 +1156,13 @@ const LAND_USE_COLS = 12;
 const LAND_USE_ROWS = 12;
 const LAND_USE_MIN = -60;
 const LAND_USE_CELL = 10;
+const CROSSWALK_DIRECTIONS = [
+  { name: "north", dc: 0, dr: 1 },
+  { name: "south", dc: 0, dr: -1 },
+  { name: "east", dc: 1, dr: 0 },
+  { name: "west", dc: -1, dr: 0 }
+];
+const CROSSWALK_OFFSET = 6.1;
 const roadLayout = loadRoadLayout();
 const ROAD_SEGMENTS = buildRoadSegmentsFromLayout(roadLayout);
 scene.add(policyVisuals);
@@ -1186,9 +1193,7 @@ function defaultRoadEdges() {
 }
 
 function defaultZebras() {
-  const zebras = [];
-  [1, 2, 3].forEach(col => [1, 2, 3].forEach(row => zebras.push({ col, row, rotation: 0 })));
-  return zebras;
+  return [1, 2, 3].flatMap(col => [1, 2, 3].map(row => ({ col, row })));
 }
 
 function defaultLandUse() {
@@ -1218,6 +1223,53 @@ function normalizeEdge(edge) {
   return { a, b };
 }
 
+function gridPointKey(point) {
+  return `${point.col},${point.row}`;
+}
+
+function directionDef(direction) {
+  return CROSSWALK_DIRECTIONS.find(item => item.name === direction);
+}
+
+function crosswalkKey(crosswalk) {
+  return `${crosswalk.col},${crosswalk.row},${crosswalk.direction}`;
+}
+
+function edgeMapHasConnection(edgeMap, point, direction) {
+  const def = directionDef(direction);
+  if (!def) return false;
+  const neighbor = { col: point.col + def.dc, row: point.row + def.dr };
+  if (neighbor.col < 0 || neighbor.col >= GRID_X.length || neighbor.row < 0 || neighbor.row >= GRID_Z.length) return false;
+  const normalized = normalizeEdge({ a: point, b: neighbor });
+  return normalized ? edgeMap.has(`${gridPointKey(normalized.a)}:${gridPointKey(normalized.b)}`) : false;
+}
+
+function connectedCrosswalkDirections(point, edgeMap) {
+  return CROSSWALK_DIRECTIONS
+    .filter(direction => edgeMapHasConnection(edgeMap, point, direction.name))
+    .map(direction => direction.name);
+}
+
+function normalizeZebras(rawZebras, edgeMap) {
+  const source = Array.isArray(rawZebras) ? rawZebras : defaultZebras();
+  const zebraMap = new Map();
+  source.forEach(zebra => {
+    const point = {
+      col: clamp(Math.round(zebra.col ?? 0), 0, GRID_X.length - 1),
+      row: clamp(Math.round(zebra.row ?? 0), 0, GRID_Z.length - 1)
+    };
+    const directions = directionDef(zebra.direction)
+      ? [zebra.direction]
+      : connectedCrosswalkDirections(point, edgeMap);
+    directions.forEach(direction => {
+      if (!edgeMapHasConnection(edgeMap, point, direction)) return;
+      const normalized = { ...point, direction };
+      zebraMap.set(crosswalkKey(normalized), normalized);
+    });
+  });
+  return [...zebraMap.values()].sort((a, b) => a.row - b.row || a.col - b.col || a.direction.localeCompare(b.direction));
+}
+
 function normalizeLayout(layout) {
   const edgeMap = new Map();
   (layout?.edges || defaultRoadEdges()).forEach(edge => {
@@ -1225,16 +1277,11 @@ function normalizeLayout(layout) {
     if (!normalized) return;
     edgeMap.set(`${normalized.a.col},${normalized.a.row}:${normalized.b.col},${normalized.b.row}`, normalized);
   });
-  const zebras = (layout?.zebras || defaultZebras()).map(zebra => ({
-    col: clamp(Math.round(zebra.col ?? 0), 0, GRID_X.length - 1),
-    row: clamp(Math.round(zebra.row ?? 0), 0, GRID_Z.length - 1),
-    rotation: Number.isFinite(Number(zebra.rotation)) ? Number(zebra.rotation) : 0
-  }));
   return {
-    version: 1,
+    version: 2,
     zebraLength: clamp(Number(layout?.zebraLength || 5.4), 1.5, 14),
     edges: [...edgeMap.values()],
-    zebras,
+    zebras: normalizeZebras(layout?.zebras, edgeMap),
     landUse: normalizeLandUse(layout?.landUse)
   };
 }
@@ -1337,15 +1384,25 @@ function addRoad(width, depth, x, z) {
   }
 }
 
-function addCrosswalk(x, z, rotation = 0, length = roadLayout.zebraLength) {
+function crosswalkTransform(crosswalk) {
+  const def = directionDef(crosswalk.direction);
+  const x = GRID_X[crosswalk.col] + (def?.dc || 0) * CROSSWALK_OFFSET;
+  const z = GRID_Z[crosswalk.row] + (def?.dr || 0) * CROSSWALK_OFFSET;
+  const rotation = crosswalk.direction === "east" || crosswalk.direction === "west" ? Math.PI / 2 : 0;
+  return { x, z, rotation };
+}
+
+function addCrosswalk(crosswalk, length = roadLayout.zebraLength) {
+  const transform = crosswalkTransform(crosswalk);
+  const safeLength = Math.min(length, ROAD_WIDTH - 0.6);
   const group = new THREE.Group();
   for (let i = -2; i <= 2; i++) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(length, 0.07, 0.55), crosswalkMaterial);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(safeLength, 0.07, 0.55), crosswalkMaterial);
     stripe.position.set(0, 0, i * 1.05);
     group.add(stripe);
   }
-  group.position.set(x, 0.72, z);
-  group.rotation.y = rotation;
+  group.position.set(transform.x, 0.72, transform.z);
+  group.rotation.y = transform.rotation;
   scene.add(group);
 }
 
@@ -1373,9 +1430,10 @@ function buildRoadNetwork() {
 
   ROAD_SEGMENTS.forEach(road => addRoad(road.width, road.depth, road.x, road.z));
   roadLayout.zebras.forEach(zebra => {
-    const x = GRID_X[zebra.col];
-    const z = GRID_Z[zebra.row];
-    if (hasRoadAt(x, z, "h") || hasRoadAt(x, z, "v")) addCrosswalk(x, z, zebra.rotation, roadLayout.zebraLength);
+    const transform = crosswalkTransform(zebra);
+    if (hasRoadAt(transform.x, transform.z, zebra.direction === "east" || zebra.direction === "west" ? "h" : "v")) {
+      addCrosswalk(zebra, roadLayout.zebraLength);
+    }
   });
 }
 
@@ -1732,6 +1790,14 @@ function roadPoint(x, z) {
   return new THREE.Vector3(x, 0.72, z);
 }
 
+function trafficNodeKey(point) {
+  return `${point.col},${point.row}`;
+}
+
+function trafficPointFromNode(point) {
+  return roadPoint(GRID_X[point.col], GRID_Z[point.row]);
+}
+
 function offsetRoutePoints(points, side = 1) {
   if (points.length < 2) return points;
   return points.map((point, index) => {
@@ -1745,53 +1811,75 @@ function offsetRoutePoints(points, side = 1) {
   });
 }
 
-function addBidirectionalRoute(routes, id, points) {
-  routes.push({ id: `${id}-ida`, points: offsetRoutePoints(points, 1) });
-  routes.push({ id: `${id}-vuelta`, points: offsetRoutePoints([...points].reverse(), -1) });
+function buildTrafficGraph() {
+  const nodes = new Map();
+  const adjacency = new Map();
+  const ensureNode = point => {
+    const key = trafficNodeKey(point);
+    if (!nodes.has(key)) nodes.set(key, { col: point.col, row: point.row });
+    if (!adjacency.has(key)) adjacency.set(key, new Set());
+    return key;
+  };
+  roadLayout.edges.forEach(edge => {
+    const a = ensureNode(edge.a);
+    const b = ensureNode(edge.b);
+    adjacency.get(a).add(b);
+    adjacency.get(b).add(a);
+  });
+  return {
+    nodes: [...nodes.entries()].map(([key, point]) => ({ key, point })),
+    adjacency
+  };
 }
 
 function buildTrafficRoutes() {
-  const routes = [];
-  roadLayout.edges.forEach((edge, index) => {
-    addBidirectionalRoute(routes, `edge-${index}`, [
-      roadPoint(GRID_X[edge.a.col], GRID_Z[edge.a.row]),
-      roadPoint(GRID_X[edge.b.col], GRID_Z[edge.b.row])
-    ]);
+  return roadLayout.edges.flatMap((edge, index) => {
+    const a = trafficPointFromNode(edge.a);
+    const b = trafficPointFromNode(edge.b);
+    return [
+      { id: `edge-${index}-ida`, points: offsetRoutePoints([a, b], 1) },
+      { id: `edge-${index}-vuelta`, points: offsetRoutePoints([b, a], -1) }
+    ];
   });
+}
 
-  GRID_Z.forEach((z, row) => {
-    const rowEdges = roadLayout.edges.filter(edge => edge.a.row === row && edge.b.row === row).sort((a, b) => a.a.col - b.a.col);
-    const points = [];
-    rowEdges.forEach(edge => {
-      const start = roadPoint(GRID_X[edge.a.col], z);
-      const end = roadPoint(GRID_X[edge.b.col], z);
-      if (points.length && points[points.length - 1].x !== start.x) {
-        if (points.length > 1) addBidirectionalRoute(routes, `row-${row}-${routes.length}`, [...points]);
-        points.length = 0;
-      }
-      if (!points.length) points.push(start);
-      points.push(end);
+function findTrafficPath(startKey, endKey) {
+  const queue = [startKey];
+  const previous = new Map([[startKey, null]]);
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const key = queue[cursor];
+    if (key === endKey) break;
+    (trafficGraph?.adjacency.get(key) || []).forEach(nextKey => {
+      if (previous.has(nextKey)) return;
+      previous.set(nextKey, key);
+      queue.push(nextKey);
     });
-    if (points.length > 1) addBidirectionalRoute(routes, `row-${row}`, points);
-  });
+  }
+  if (!previous.has(endKey)) return null;
+  const path = [];
+  for (let key = endKey; key; key = previous.get(key)) {
+    path.push(trafficGraph.nodes.find(node => node.key === key).point);
+  }
+  return path.reverse();
+}
 
-  GRID_X.forEach((x, col) => {
-    const colEdges = roadLayout.edges.filter(edge => edge.a.col === col && edge.b.col === col).sort((a, b) => a.a.row - b.a.row);
-    const points = [];
-    colEdges.forEach(edge => {
-      const start = roadPoint(x, GRID_Z[edge.a.row]);
-      const end = roadPoint(x, GRID_Z[edge.b.row]);
-      if (points.length && points[points.length - 1].z !== start.z) {
-        if (points.length > 1) addBidirectionalRoute(routes, `col-${col}-${routes.length}`, [...points]);
-        points.length = 0;
-      }
-      if (!points.length) points.push(start);
-      points.push(end);
-    });
-    if (points.length > 1) addBidirectionalRoute(routes, `col-${col}`, points);
-  });
+function randomItem(items) {
+  return items[Math.floor(Math.random() * items.length)];
+}
 
-  return routes.filter(route => route.points.length > 1);
+function createRandomTrafficRoute() {
+  const nodes = trafficGraph?.nodes || [];
+  if (nodes.length < 2) return null;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const start = randomItem(nodes);
+    const end = randomItem(nodes);
+    if (!start || !end || start.key === end.key) continue;
+    const path = findTrafficPath(start.key, end.key);
+    if (!path || path.length < 2) continue;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    return { id: `${start.key}-${end.key}`, points: offsetRoutePoints(path.map(trafficPointFromNode), side) };
+  }
+  return allRoutes.length ? randomItem(allRoutes) : null;
 }
 
 async function loadRoutes() {
@@ -1807,6 +1895,7 @@ async function loadRoutes() {
       ]
     };
   }
+  trafficGraph = buildTrafficGraph();
   allRoutes = buildTrafficRoutes();
 }
 
@@ -1887,26 +1976,40 @@ function removeVehicles(kind) {
   }
 }
 
-function spawnVehicle(time) {
-  if (!allRoutes.length || time - lastSpawn < spawnInterval) return;
-  const totalMax = maxCars + maxTrucks + maxBuses + maxBikes;
-  if (cars.length >= totalMax) return;
-  let kind = "car";
-  if (vehicleCount("truck") < maxTrucks && routeIndex % 5 === 0) kind = "truck";
-  else if (vehicleCount("bus") < maxBuses && routeIndex % 4 === 0) kind = "bus";
-  else if (vehicleCount("bike") < maxBikes && routeIndex % 3 === 0) kind = "bike";
-  else if (vehicleCount("car") >= maxCars) return;
-  const route = allRoutes[routeIndex % allRoutes.length];
-  routeIndex++;
-  lastSpawn = time;
-  const vehicle = createVehicle(kind);
-  vehicle.position.copy(route.points[0]);
-  scene.add(vehicle);
-  const speedBase = kind === "truck" ? 0.048 : kind === "bus" ? 0.055 : kind === "bike" ? 0.04 : 0.072;
-  cars.push({ kind, mesh: vehicle, route: route.points, segment: 0, t: 0, speed: speedBase + Math.random() * 0.025, rotation: 0 });
+function vehicleCapacity(kind) {
+  return { car: maxCars, truck: maxTrucks, bus: maxBuses, bike: maxBikes }[kind] || 0;
 }
 
-function addVehicleOnRoute(kind, route, tOffset) {
+function selectVehicleKind(allowedKinds = ["car", "truck", "bus", "bike"]) {
+  const options = allowedKinds
+    .map(kind => ({ kind, remaining: Math.max(0, vehicleCapacity(kind) - vehicleCount(kind)) }))
+    .filter(option => option.remaining > 0);
+  const total = options.reduce((sum, option) => sum + option.remaining, 0);
+  if (!total) return null;
+  let pick = Math.random() * total;
+  for (const option of options) {
+    pick -= option.remaining;
+    if (pick <= 0) return option.kind;
+  }
+  return options[options.length - 1].kind;
+}
+
+function vehicleSpeedBase(kind) {
+  return kind === "truck" ? 0.048 : kind === "bus" ? 0.055 : kind === "bike" ? 0.04 : 0.072;
+}
+
+function spawnVehicle(time) {
+  if (!trafficGraph?.nodes.length || time - lastSpawn < spawnInterval) return;
+  const totalMax = maxCars + maxTrucks + maxBuses + maxBikes;
+  if (cars.length >= totalMax) return;
+  const kind = selectVehicleKind();
+  const route = createRandomTrafficRoute();
+  if (!kind || !route) return;
+  lastSpawn = time;
+  addVehicleOnRoute(kind, route, 0, Math.random() * 0.025);
+}
+
+function addVehicleOnRoute(kind, route, tOffset, speedJitter = 0) {
   const vehicle = createVehicle(kind);
   const segment = Math.min(route.points.length - 2, Math.floor(tOffset * (route.points.length - 1)));
   const localT = (tOffset * (route.points.length - 1)) % 1;
@@ -1916,32 +2019,33 @@ function addVehicleOnRoute(kind, route, tOffset) {
   const direction = new THREE.Vector3().subVectors(end, start);
   vehicle.rotation.y = Math.atan2(direction.x, direction.z) - Math.PI / 2;
   scene.add(vehicle);
-  const speedBase = kind === "truck" ? 0.048 : kind === "bus" ? 0.055 : kind === "bike" ? 0.04 : 0.072;
-  cars.push({ kind, mesh: vehicle, route: route.points, segment, t: localT, speed: speedBase, rotation: vehicle.rotation.y });
+  cars.push({ kind, mesh: vehicle, route: route.points, segment, t: localT, speed: vehicleSpeedBase(kind) + speedJitter, rotation: vehicle.rotation.y });
 }
 
 function seedInitialTraffic() {
-  if (!allRoutes.length) return;
-  const rng = seededRandom(55121);
-  const initialCars = Math.min(maxCars, 42);
-  const initialTrucks = Math.min(maxTrucks, 10);
-  for (let i = 0; i < initialCars; i++) {
-    addVehicleOnRoute("car", allRoutes[i % allRoutes.length], rng());
-  }
-  for (let i = 0; i < initialTrucks; i++) {
-    addVehicleOnRoute("truck", allRoutes[(i + 2) % allRoutes.length], rng());
+  if (!trafficGraph?.nodes.length) return;
+  const initialTotal = Math.min(maxCars + maxTrucks + maxBuses + maxBikes, 52);
+  let attempts = 0;
+  while (cars.length < initialTotal && attempts < initialTotal * 4) {
+    attempts++;
+    const kind = selectVehicleKind();
+    const route = createRandomTrafficRoute();
+    if (!kind || !route) break;
+    addVehicleOnRoute(kind, route, Math.random(), Math.random() * 0.018);
   }
 }
 
 function seedSpecialVehicles() {
-  if (!allRoutes.length) return;
+  if (!trafficGraph?.nodes.length) return;
   while (vehicleCount("bus") < maxBuses) {
-    addVehicleOnRoute("bus", allRoutes[(routeIndex + 1) % allRoutes.length], (routeIndex * 0.17) % 1);
-    routeIndex++;
+    const route = createRandomTrafficRoute();
+    if (!route) break;
+    addVehicleOnRoute("bus", route, Math.random(), Math.random() * 0.012);
   }
   while (vehicleCount("bike") < maxBikes) {
-    addVehicleOnRoute("bike", allRoutes[(routeIndex + 2) % allRoutes.length], (routeIndex * 0.23) % 1);
-    routeIndex++;
+    const route = createRandomTrafficRoute();
+    if (!route) break;
+    addVehicleOnRoute("bike", route, Math.random(), Math.random() * 0.012);
   }
 }
 
@@ -2158,6 +2262,23 @@ function cullVehiclesToTargets() {
   }
 }
 
+function vehicleDebugSamples() {
+  return cars.slice(0, 12).map(vehicle => ({
+    kind: vehicle.kind,
+    x: Number(vehicle.mesh.position.x.toFixed(2)),
+    z: Number(vehicle.mesh.position.z.toFixed(2)),
+    routeStart: {
+      x: Number(vehicle.route[0].x.toFixed(2)),
+      z: Number(vehicle.route[0].z.toFixed(2))
+    },
+    routeEnd: {
+      x: Number(vehicle.route[vehicle.route.length - 1].x.toFixed(2)),
+      z: Number(vehicle.route[vehicle.route.length - 1].z.toFixed(2))
+    },
+    routePoints: vehicle.route.length
+  }));
+}
+
 function updateSceneDebug() {
   const debug = {
     buildingsVisible: buildingSeedData.filter(item => item.mesh.visible).length,
@@ -2169,6 +2290,10 @@ function updateSceneDebug() {
     }, {}),
     dustVisible: dustClouds.filter(cloud => cloud.visible).length,
     roadSegments: ROAD_SEGMENTS.length,
+    trafficNodes: trafficGraph?.nodes.length || 0,
+    trafficRoutes: allRoutes.length,
+    crosswalks: roadLayout.zebras.length,
+    vehicleSamples: vehicleDebugSamples(),
     greenZone: { ...GREEN_ZONE },
     maxCars,
     maxTrucks,
@@ -2435,6 +2560,10 @@ cloudData.forEach(c => {
     }, {}),
     dustVisible: dustClouds.filter(cloud => cloud.visible).length,
     roadSegments: ROAD_SEGMENTS.length,
+    trafficNodes: trafficGraph?.nodes.length || 0,
+    trafficRoutes: allRoutes.length,
+    crosswalks: roadLayout.zebras.length,
+    vehicleSamples: vehicleDebugSamples(),
     greenZone: { ...GREEN_ZONE },
     maxCars,
     maxTrucks,
