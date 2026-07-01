@@ -1163,6 +1163,7 @@ const CROSSWALK_DIRECTIONS = [
   { name: "west", dc: -1, dr: 0 }
 ];
 const CROSSWALK_OFFSET = 6.1;
+const RIGHT_LANE_SIDE = -1;
 const roadLayout = loadRoadLayout();
 const ROAD_SEGMENTS = buildRoadSegmentsFromLayout(roadLayout);
 scene.add(policyVisuals);
@@ -1395,10 +1396,11 @@ function crosswalkTransform(crosswalk) {
 function addCrosswalk(crosswalk, length = roadLayout.zebraLength) {
   const transform = crosswalkTransform(crosswalk);
   const safeLength = Math.min(length, ROAD_WIDTH - 0.6);
+  const stripeLength = safeLength / 2;
   const group = new THREE.Group();
   for (let i = -2; i <= 2; i++) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(safeLength, 0.07, 0.55), crosswalkMaterial);
-    stripe.position.set(0, 0, i * 1.05);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.07, stripeLength), crosswalkMaterial);
+    stripe.position.set(i * 1.05, 0, 0);
     group.add(stripe);
   }
   group.position.set(transform.x, 0.72, transform.z);
@@ -1798,7 +1800,7 @@ function trafficPointFromNode(point) {
   return roadPoint(GRID_X[point.col], GRID_Z[point.row]);
 }
 
-function offsetRoutePoints(points, side = 1) {
+function offsetRoutePoints(points, side = RIGHT_LANE_SIDE) {
   if (points.length < 2) return points;
   return points.map((point, index) => {
     const prev = points[Math.max(0, index - 1)];
@@ -1837,8 +1839,8 @@ function buildTrafficRoutes() {
     const a = trafficPointFromNode(edge.a);
     const b = trafficPointFromNode(edge.b);
     return [
-      { id: `edge-${index}-ida`, points: offsetRoutePoints([a, b], 1) },
-      { id: `edge-${index}-vuelta`, points: offsetRoutePoints([b, a], -1) }
+      { id: `edge-${index}-ida`, points: offsetRoutePoints([a, b]) },
+      { id: `edge-${index}-vuelta`, points: offsetRoutePoints([b, a]) }
     ];
   });
 }
@@ -1876,8 +1878,7 @@ function createRandomTrafficRoute() {
     if (!start || !end || start.key === end.key) continue;
     const path = findTrafficPath(start.key, end.key);
     if (!path || path.length < 2) continue;
-    const side = Math.random() < 0.5 ? -1 : 1;
-    return { id: `${start.key}-${end.key}`, points: offsetRoutePoints(path.map(trafficPointFromNode), side) };
+    return { id: `${start.key}-${end.key}`, points: offsetRoutePoints(path.map(trafficPointFromNode)) };
   }
   return allRoutes.length ? randomItem(allRoutes) : null;
 }

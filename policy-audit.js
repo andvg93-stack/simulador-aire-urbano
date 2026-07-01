@@ -7,7 +7,7 @@ const MD_OUT = "policy-audit-summary.md";
 const CSV_OUT = "policy-audit-combinations.csv";
 
 function extractConst(source, name) {
-  const regex = new RegExp(`const\\s+${name}\\s*=\\s*([\\s\\S]*?);\\n`);
+  const regex = new RegExp(`const\\s+${name}\\s*=\\s*([\\s\\S]*?);\\r?\\n`);
   const match = source.match(regex);
   if (!match) throw new Error(`No se encontro const ${name}`);
   return match[1].trim();
