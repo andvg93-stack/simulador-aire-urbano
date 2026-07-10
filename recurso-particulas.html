@@ -37,5 +37,6 @@ const level=document.getElementById("level"),value=document.getElementById("valu
 function render(){const n=Number(level.value);value.textContent=n;fill.style.width=`${Math.min(100,n/120*100)}%`;fill.style.background=n<35?"#1b8a5a":n<75?"#b77800":"#be3a34";box.innerHTML="";for(let i=0;i<n;i++){const d=document.createElement("i");const fine=i<n*.58;d.className="dot";const s=fine?2+Math.random()*4:7+Math.random()*10;d.style.width=d.style.height=`${s}px`;d.style.left=`${Math.random()*100}%`;d.style.top=`${Math.random()*100}%`;d.style.background=fine?"#303943":"#8b6f47";box.appendChild(d);}}
 level.addEventListener("input",render);render();
 </script>
+<script src="recurso-volver.js"></script>
 </body>
 </html>

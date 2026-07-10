@@ -21,6 +21,7 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Cada uno de los 12 parametros enlaza un recurso didactico.
 - Se agregaron paginas individuales para PM2.5, PM10, altura de mezcla, indice de ventilacion y estancamiento.
 - Los recursos navegan en la misma pestana para evitar bloqueos de popups; cada pagina permite volver al simulador.
+- Los 12 recursos enlazados muestran exactamente un control para volver al simulador, incluidos los recursos antiguos.
 
 ## Presupuesto
 
