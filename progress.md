@@ -23,6 +23,11 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Los recursos navegan en la misma pestana para evitar bloqueos de popups; cada pagina permite volver al simulador.
 - Los 12 recursos enlazados muestran exactamente un control para volver al simulador, incluidos los recursos antiguos.
 
+## Tema ambiental
+
+- La pagina principal usa una paleta bosque, tarjetas marfil, textura vectorial de hojas y terminologia ambiental.
+- Se mantuvieron intactas la simulacion y las paginas de recursos educativos.
+
 ## Presupuesto
 
 - Disponible y usado se unificaron en una tarjeta con barra de saldo disponible.
