@@ -578,9 +578,9 @@
   body { background-image:radial-gradient(circle at 52% 40%,rgba(88,148,94,.28),transparent 40%),linear-gradient(135deg,#0b3926,#123f27 48%,#082719); }
   body::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.16; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cg fill='none' stroke='%23b7df75' stroke-width='2'%3E%3Cpath d='M18 148C58 118 74 64 82 18'/%3E%3Cpath d='M60 86c-24 3-36-8-41-26 22-4 37 6 41 26ZM70 59c19-17 38-15 53-1-15 18-33 19-53 1ZM39 118c-18 5-30-2-37-15 15-9 30-5 37 15Z' fill='%238fc95c' fill-opacity='.28'/%3E%3C/g%3E%3C/svg%3E"); }
   body::after { background:radial-gradient(circle at 55% 42%,transparent 40%,rgba(2,31,18,.24) 100%); }
-  #viewport { border-color:rgba(185,224,132,.72); box-shadow:0 0 22px rgba(91,154,66,.28),inset 0 0 45px rgba(11,55,29,.25); }
+  #viewport { border-color:rgba(185,224,132,.72); background-image:linear-gradient(rgba(224,244,229,.06),rgba(105,171,143,.08)),url("assets/cloud-sky-background.png"); background-size:cover; background-position:center; box-shadow:0 0 22px rgba(91,154,66,.28),inset 0 0 45px rgba(11,55,29,.25); }
   #viewport::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2; border-radius:inherit; background:linear-gradient(150deg,rgba(154,205,111,.12),transparent 32%,rgba(34,104,55,.1)); }
-  #viewport canvas { filter:saturate(1.14) sepia(.08) hue-rotate(342deg); }
+  #viewport canvas { filter:saturate(1.28) contrast(1.08) sepia(.05) hue-rotate(342deg); }
   .panel { background:linear-gradient(145deg,rgba(19,87,54,.96),rgba(8,54,34,.95)); border-color:var(--line); box-shadow:0 16px 38px rgba(2,28,15,.38),inset 0 1px rgba(230,244,193,.07); }
   #policy-panel .panel-head { position:relative; padding-left:72px; min-height:116px; }
   #policy-panel .panel-head::before { content:"🍃"; position:absolute; left:18px; top:19px; display:grid; place-items:center; width:42px; height:42px; border-radius:50%; font-size:25px; background:linear-gradient(145deg,#9eda5e,#3f8b3e); box-shadow:0 7px 18px rgba(0,0,0,.25); }
@@ -618,7 +618,7 @@
   #monitor-panel .param-card strong { color:#245332; }
   #monitor-panel .bar { background:rgba(73,111,70,.16); }
   .insight-row { border-color:rgba(189,220,141,.25); background:linear-gradient(135deg,rgba(55,116,61,.9),rgba(27,85,48,.92)); }
-  #city-hud { background:linear-gradient(90deg,rgba(40,94,48,.9),rgba(85,124,66,.82)); border-color:rgba(220,234,186,.4); }
+  #city-hud { background:linear-gradient(90deg,rgba(29,77,40,.52),rgba(72,108,57,.46)); border-color:rgba(232,242,204,.52); box-shadow:0 12px 28px rgba(8,45,24,.18),inset 0 1px rgba(255,255,255,.14); backdrop-filter:blur(14px) saturate(1.18); -webkit-backdrop-filter:blur(14px) saturate(1.18); }
   .hud-metric em { color:#b9e06c; }
   #year-timeline { position:relative; overflow:hidden; background:linear-gradient(90deg,rgba(22,78,42,.95),rgba(48,101,52,.95)); }
   #year-timeline::before,#year-timeline::after { content:"❧"; position:absolute; color:#9bcd65; font-size:35px; opacity:.38; }
@@ -1196,7 +1196,7 @@ function drawChart() {
 
 const viewport = document.getElementById("viewport");
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+scene.background = null;
 scene.fog = new THREE.FogExp2(0xa8d8ea, 0.0022);
 
 const aspect = window.innerWidth / window.innerHeight;
@@ -1205,7 +1205,8 @@ const camera = new THREE.OrthographicCamera(-cameraSize * aspect, cameraSize * a
 camera.position.set(105, 95, 105);
 camera.lookAt(0, 0, 0);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
@@ -1258,36 +1259,8 @@ const fillLight = new THREE.DirectionalLight(0xbad8ff, 0.28);
 fillLight.position.set(-65, 45, -50);
 scene.add(sun, ambient, hemi, fillLight);
 
-// --- Nubes ---
-const cloudGroup = new THREE.Group();
-const cloudMat = new THREE.MeshStandardMaterial({ color: 0xf2f5ee, roughness: 1, transparent: true, opacity: 0.82 });
-
-function makeCloud(x, y, z, scale) {
-  const group = new THREE.Group();
-  [[0,0,0],[1.8,0.2,0.3],[-1.6,0.1,-0.2],[0.4,0.5,-0.8],[2.8,-0.1,0.1],[-2.6,0,-0.4]].forEach(([dx,dy,dz]) => {
-    const puff = new THREE.Mesh(new THREE.SphereGeometry((1.2 + Math.random() * 0.8) * scale, 10, 7), cloudMat);
-    puff.position.set(dx * scale, dy * scale, dz * scale);
-    group.add(puff);
-  });
-  group.position.set(x, y, z);
-  return group;
-}
-
-const cloudData = [];
-for (let i = 0; i < 14; i++) {
-  const x = -100 + Math.random() * 560;
-  const y = 65 + Math.random() * 10;
-  const z = -50- Math.random() * 180;
-  const scale = 3.5 + Math.random() * 5;
-  const speed = 0.008 + Math.random() * 0.014;
-  const cloud = makeCloud(x, y, z, scale);
-  cloudGroup.add(cloud);
-  cloudData.push({ mesh: cloud, speed, baseX: x });
-}
-scene.add(cloudGroup);
-
 const visualTargets = {
-  bg: scene.background.clone(),
+  bg: new THREE.Color(0xb9d8cd),
   fog: scene.fog.color.clone(),
   fogDensity: scene.fog.density,
   sun: sun.intensity,
@@ -2422,7 +2395,6 @@ function updateVisualTargets(values) {
 }
 
 function applyVisualTargets() {
-  scene.background.lerp(visualTargets.bg, 0.045);
   scene.fog.color.lerp(visualTargets.fog, 0.05);
   scene.fog.density = lerp(scene.fog.density, visualTargets.fogDensity, 0.05);
   sun.intensity = lerp(sun.intensity, visualTargets.sun, 0.05);
@@ -2727,12 +2699,6 @@ function animate(time) {
   spawnVehicle(time);
   animateCars();
   applyVisualTargets();
-
-  // Mover nubes
-cloudData.forEach(c => {
-  c.mesh.position.x += c.speed;
-  if (c.mesh.position.x > 300) c.mesh.position.x = -300;
-});
 
   controls.update();
   renderer.render(scene, camera);

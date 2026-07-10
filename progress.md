@@ -29,6 +29,11 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Se mantuvieron intactas la simulacion y las paginas de recursos educativos.
 - El panel de monitoreo reserva espacio para sus tres insights y desplaza solamente la grilla de parametros.
 
+## Atmosfera
+
+- Se retiraron las nubes 3D y se agrego una textura atmosferica local con nubes en los bordes.
+- El HUD inferior usa transparencia y desenfoque para dejar visible el escenario.
+
 ## Presupuesto
 
 - Disponible y usado se unificaron en una tarjeta con barra de saldo disponible.
