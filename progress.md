@@ -14,8 +14,12 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 
 ## Minigraficas
 
-- Se reemplazaron los trazos decorativos por series calculadas desde el ano 0 hasta el ano actual.
-- Cada serie usa la misma funcion de simulacion que alimenta su valor numerico y su barra.
+- Se retiraron las minigraficas por resultar demasiado sutiles para comunicar los cambios.
+
+## Recursos didacticos
+
+- Cada uno de los 12 parametros enlaza un recurso didactico.
+- Se agregaron paginas individuales para PM2.5, PM10, altura de mezcla, indice de ventilacion y estancamiento.
 
 ## Presupuesto
 

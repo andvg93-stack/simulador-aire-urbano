@@ -554,7 +554,6 @@
   .param-card span { color:#a7bdca; font-size:10px; }
   .param-card strong { font-size:22px; }
   .param-card em { color:var(--muted); }
-  .sparkline { display:block; width:100%; height:18px; margin-top:4px; }
   .bar { background:rgba(132,177,194,.16); }
   #insights { padding:8px 12px 12px; }
   .insight-row { padding:10px; margin-bottom:8px; border:1px solid var(--line); border-radius:9px; background:rgba(8,31,51,.78); }
@@ -694,17 +693,17 @@ const policies = [
 ];
 
 const paramDefinitions = [
-  { key: "pm25", label: "PM2.5", unit: "µg/m³", min: 5, max: 80, digits: 1, inverse: true, resource: "recurso-particulas.html" },
-  { key: "pm10", label: "PM10", unit: "µg/m³", min: 10, max: 120, digits: 1, inverse: true, resource: "recurso-particulas.html" },
+  { key: "pm25", label: "PM2.5", unit: "µg/m³", min: 5, max: 80, digits: 1, inverse: true, resource: "recurso-pm25.html" },
+  { key: "pm10", label: "PM10", unit: "µg/m³", min: 10, max: 120, digits: 1, inverse: true, resource: "recurso-pm10.html" },
   { key: "co2", label: "CO₂", unit: "ppm", min: 400, max: 700, digits: 0, inverse: true, resource: "recurso-co2.html" },
   { key: "nox", label: "NOx", unit: "ppb", min: 10, max: 120, digits: 0, inverse: true, resource: "recurso-nox.html" },
   { key: "o3", label: "O₃", unit: "ppb", min: 10, max: 60, digits: 1, inverse: true, resource: "recurso-ozono.html" },
   { key: "cov", label: "COV", unit: "µg/m³", min: 5, max: 50, digits: 1, inverse: true, resource: "recurso-cov.html" },
   { key: "temp", label: "Temperatura", unit: "°C", min: 18, max: 34, digits: 1, inverse: true, resource: "recurso-temperatura.html" },
   { key: "wind", label: "Vel. viento", unit: "m/s", min: 0.5, max: 5.5, digits: 1, resource: "recurso-viento.html" },
-  { key: "hmix", label: "Altura mezcla", unit: "m", min: 70, max: 220, digits: 0, resource: "recurso-ventilacion.html" },
-  { key: "vent", label: "Índice ventilación", unit: "0-100", min: 0, max: 100, digits: 0, resource: "recurso-ventilacion.html" },
-  { key: "stagnation", label: "Estancamiento", unit: "0-100", min: 0, max: 100, digits: 0, inverse: true, resource: "recurso-ventilacion.html" },
+  { key: "hmix", label: "Altura mezcla", unit: "m", min: 70, max: 220, digits: 0, resource: "recurso-altura-mezcla.html" },
+  { key: "vent", label: "Índice ventilación", unit: "0-100", min: 0, max: 100, digits: 0, resource: "recurso-indice-ventilacion.html" },
+  { key: "stagnation", label: "Estancamiento", unit: "0-100", min: 0, max: 100, digits: 0, inverse: true, resource: "recurso-estancamiento.html" },
   { key: "exposure", label: "Población expuesta", unit: "hab.", min: 30000, max: 80000, digits: 0, inverse: true, resource: "recurso-exposicion.html" }
 ];
 
@@ -1023,20 +1022,6 @@ function qualityColor(def, value) {
   return "var(--bad)";
 }
 
-function sparklineMarkup(def, rawValues) {
-  const endYear = clamp(rawValues.year, 0, TOTAL_YEARS);
-  const samples = Array.from({ length: 8 }, (_, index) => {
-    const sampleYear = endYear * index / 7;
-    return calculateValues(sampleYear)[def.key];
-  });
-  const points = samples.map((sample, index) => {
-    const ratio = clamp((sample - def.min) / (def.max - def.min), 0, 1);
-    return `${index * 14},${(17 - ratio * 14).toFixed(1)}`;
-  }).join(" ");
-  const trend = samples.at(-1) > samples[0] ? "ascendente" : samples.at(-1) < samples[0] ? "descendente" : "estable";
-  return `<svg class="sparkline" viewBox="0 0 98 20" preserveAspectRatio="none" role="img" aria-label="Tendencia ${trend} de ${def.label}" data-start="${samples[0]}" data-current="${samples.at(-1)}"><polyline points="${points}" fill="none" stroke="${qualityColor(def, rawValues[def.key])}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-}
-
 function estimatedAqi(pm25) {
   if (pm25 <= 12) return Math.round(pm25 * 50 / 12);
   if (pm25 <= 35.4) return Math.round(51 + (pm25 - 12.1) * 49 / 23.3);
@@ -1066,7 +1051,6 @@ function updateDashboard(rawValues) {
       <span>${def.label}</span>
       <strong>${fmt(value, def.digits)}</strong>
       <em>${def.unit}</em>
-      ${sparklineMarkup(def, rawValues)}
       <div class="bar"><i style="width:${width};background:${qualityColor(def, value)}"></i></div>
     `;
     grid.appendChild(card);
