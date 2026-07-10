@@ -498,6 +498,72 @@
       max-height: none;
     }
   }
+
+  /* Dashboard nocturno inspirado en la referencia de control urbano. */
+  :root { --ink:#edf7ff; --muted:#8fa8bb; --panel:rgba(5,25,43,.94); --panel-strong:rgba(8,31,51,.96); --line:rgba(91,178,210,.2); --good:#3ddc91; --warn:#ffb52e; --bad:#ff4d47; --blue:#55aaff; --teal:#38d6c0; }
+  html,body { color:var(--ink); background:#020d19; }
+  body::after { content:""; position:fixed; inset:0; pointer-events:none; z-index:4; background:radial-gradient(circle at 55% 40%,transparent 30%,rgba(1,10,20,.16) 100%); }
+  #viewport { top:82px; left:338px; right:320px; bottom:111px; overflow:hidden; border:1px solid rgba(56,214,192,.65); border-radius:17px; box-shadow:0 0 22px rgba(56,214,192,.28),inset 0 0 45px rgba(1,14,25,.42); }
+  #viewport canvas { width:100%!important; height:100%!important; }
+  #app-shell { grid-template-columns:318px minmax(520px,1fr) 306px; grid-template-rows:66px 1fr 96px; gap:12px; padding:8px; background:transparent; }
+  .panel { border-color:var(--line); border-radius:14px; background:var(--panel); box-shadow:0 14px 34px rgba(0,0,0,.35); backdrop-filter:none; }
+  #policy-panel { grid-row:1/span 3; }
+  .panel-head { padding:14px 16px 12px; border-color:var(--line); }
+  .panel-head h1,.panel-head h2 { font-size:15px; text-transform:uppercase; letter-spacing:.03em; }
+  #policy-panel .panel-head h1 { font-size:21px; text-transform:none; }
+  .panel-head p { color:var(--muted); font-size:12px; }
+  .budget-strip { grid-template-columns:1fr 1fr; padding:10px; gap:7px; border-color:var(--line); }
+  .metric-box { min-height:54px; padding:9px; border-color:var(--line); background:rgba(14,47,70,.62); }
+  .metric-box span { color:var(--muted); font-size:9px; }
+  .metric-box strong { color:#fff; font-size:14px; }
+  #policy-list { padding:10px; scrollbar-color:#2a6178 transparent; }
+  .policy-card { padding:12px 40px 12px 49px; margin-bottom:9px; color:var(--ink); border-color:var(--line); border-radius:12px; background:rgba(8,33,55,.9); }
+  .policy-card:hover { border-color:rgba(56,214,192,.65); box-shadow:0 8px 20px rgba(0,0,0,.28); }
+  .policy-card.selected { border-color:rgba(61,220,145,.7); background:linear-gradient(135deg,rgba(17,74,68,.85),rgba(8,39,57,.95)); }
+  .policy-card.locked { background:rgba(15,54,79,.95); }
+  .policy-title { font-size:13px; }
+  .policy-title small { color:#73cfff; }
+  .policy-icon { width:29px; height:29px; font-size:23px; }
+  .policy-check { width:19px; height:19px; }
+  .policy-fields { color:#a9bdcb; font-size:10px; gap:3px; }
+  .policy-fields strong { color:#d9e8f1; }
+  .policy-card p { color:var(--muted); }
+  #top-panel { grid-column:2; padding:8px 10px; grid-template-columns:150px 1fr auto; background:rgba(4,22,38,.96); }
+  .year-block { min-width:135px; padding:7px 18px; border:1px solid rgba(56,214,192,.4); border-radius:12px; background:linear-gradient(135deg,rgba(40,101,116,.68),rgba(9,65,67,.6)); text-align:center; }
+  .year-block span { display:none; }
+  .year-block strong { font-size:27px; }
+  .timeline { height:4px; background:rgba(121,175,196,.18); }
+  #timeline-fill { background:linear-gradient(90deg,#34e195,#55bfff); box-shadow:0 0 10px #34e195; }
+  .actions { gap:7px; }
+  .icon-button,.action-button { min-height:42px; color:#eaf6fc; border-color:var(--line); border-radius:9px; background:rgba(7,28,47,.9); }
+  .action-button.primary { min-width:142px; border-color:#178356; background:linear-gradient(180deg,#087643,#075d38); }
+  .action-button.secondary { border-color:rgba(85,170,255,.35); background:rgba(8,29,50,.95); }
+  .action-button.tertiary { color:#eaf6fc; background:rgba(7,28,47,.9); }
+  #monitor-panel { grid-column:3; grid-row:1/span 3; height:100%; }
+  #monitor-panel .panel-head { background:transparent; }
+  #param-grid { gap:7px; padding:10px; max-height:470px; }
+  .param-card { min-height:92px; padding:10px; border-color:var(--line); border-radius:10px; background:var(--panel-strong); }
+  .param-card span { color:#a7bdca; font-size:10px; }
+  .param-card strong { font-size:22px; }
+  .param-card em { color:var(--muted); }
+  .sparkline { display:block; width:100%; height:18px; margin-top:4px; }
+  .bar { background:rgba(132,177,194,.16); }
+  #insights { padding:8px 12px 12px; }
+  .insight-row { padding:10px; margin-bottom:8px; border:1px solid var(--line); border-radius:9px; background:rgba(8,31,51,.78); }
+  .insight-row span { color:var(--muted); font-size:9px; }
+  .insight-row strong { font-size:12px; }
+  #city-hud { grid-column:2; grid-row:2; align-self:end; z-index:2; pointer-events:none; margin:0 10px 8px; padding:12px; display:grid; grid-template-columns:repeat(4,1fr); gap:0; }
+  .hud-metric { padding:2px 16px; border-right:1px solid var(--line); }
+  .hud-metric:last-child { border-right:0; }
+  .hud-metric span { display:block; color:var(--muted); font-size:10px; }
+  .hud-metric strong { display:inline-block; margin-top:5px; font-size:24px; }
+  .hud-metric em { margin-left:6px; color:var(--good); font-size:11px; font-style:normal; white-space:nowrap; }
+  #year-timeline { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:space-around; padding:12px 24px; }
+  .year-node { position:relative; display:grid; place-items:center; width:38px; height:38px; border-radius:50%; color:#9fb4c2; background:#183448; border:1px solid rgba(112,172,194,.12); font-weight:800; }
+  .year-node::after { content:attr(data-label); position:absolute; top:43px; color:#67899d; font-size:9px; white-space:nowrap; }
+  .year-node.active { color:#bfffe1; border-color:#1fbf77; background:#0b5239; box-shadow:0 0 16px rgba(31,191,119,.35); }
+  @media(max-width:1180px){ #app-shell{grid-template-columns:290px 1fr;grid-template-rows:72px 520px auto auto} #viewport{left:302px;right:8px;top:92px;bottom:auto;height:500px} #monitor-panel{grid-column:2;grid-row:3;height:auto} #city-hud{grid-column:2;grid-row:2} #year-timeline{grid-column:2;grid-row:4} }
+  @media(max-width:820px){ body{overflow:auto;background:#03111f} #viewport{position:absolute;left:10px;right:10px;top:92px;height:420px} #app-shell{display:flex;flex-direction:column;padding:524px 10px 10px;background:transparent} #top-panel{position:absolute;top:10px;left:10px;right:10px;grid-template-columns:110px 1fr} #top-panel .actions{grid-column:1/-1;overflow-x:auto} #policy-panel,#monitor-panel,#city-hud,#year-timeline{width:100%;height:auto} #city-hud{grid-template-columns:1fr 1fr;margin:0} #param-grid{max-height:none} }
 </style>
 </head>
 <body>
@@ -545,6 +611,20 @@
       <div class="insight-row"><span>Condición agravante</span><strong id="condition-help">--</strong></div>
       <div class="insight-row"><span>Prioridad de intervención</span><strong id="priority-help">--</strong></div>
     </div>
+  </section>
+
+  <section id="city-hud" class="panel" aria-label="Indicadores de la ciudad">
+    <div class="hud-metric"><span>Aceptaci&oacute;n ciudadana</span><strong id="hud-acceptance">70</strong><em>/100</em></div>
+    <div class="hud-metric"><span>AQI estimado</span><strong id="hud-aqi">98</strong><em id="hud-aqi-label">Moderada</em></div>
+    <div class="hud-metric"><span>Emisiones relativas</span><strong id="hud-emissions">100</strong><em>%</em></div>
+    <div class="hud-metric"><span>Gasto proyectado</span><strong id="hud-cost">0</strong><em>M COP</em></div>
+  </section>
+
+  <section id="year-timeline" class="panel" aria-label="L&iacute;nea de tiempo de simulaci&oacute;n">
+    <span class="year-node active" data-year="0" data-label="Inicio">0</span>
+    <span class="year-node" data-year="1" data-label="A&ntilde;o">1</span><span class="year-node" data-year="2" data-label="A&ntilde;o">2</span>
+    <span class="year-node" data-year="3" data-label="A&ntilde;o">3</span><span class="year-node" data-year="4" data-label="A&ntilde;o">4</span>
+    <span class="year-node" data-year="5" data-label="A&ntilde;o">5</span>
   </section>
 
 </main>
@@ -923,6 +1003,22 @@ function qualityColor(def, value) {
   return "var(--bad)";
 }
 
+function sparklineMarkup(def) {
+  const seed = def.key.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const points = Array.from({ length: 8 }, (_, index) => {
+    const wave = Math.sin((index + seed) * 1.7) * 3 + Math.cos((index + seed) * 0.61) * 2;
+    return `${index * 14},${Math.round(10 - wave)}`;
+  }).join(" ");
+  return `<svg class="sparkline" viewBox="0 0 98 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="${qualityColor(def, baseline[def.key] ?? def.min)}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function estimatedAqi(pm25) {
+  if (pm25 <= 12) return Math.round(pm25 * 50 / 12);
+  if (pm25 <= 35.4) return Math.round(51 + (pm25 - 12.1) * 49 / 23.3);
+  if (pm25 <= 55.4) return Math.round(101 + (pm25 - 35.5) * 49 / 19.9);
+  return Math.round(clamp(151 + (pm25 - 55.5) * 49 / 94.9, 151, 200));
+}
+
 function updateDashboard(rawValues) {
   const values = { ...rawValues };
   paramDefinitions.forEach(def => {
@@ -945,6 +1041,7 @@ function updateDashboard(rawValues) {
       <span>${def.label}</span>
       <strong>${fmt(value, def.digits)}</strong>
       <em>${def.unit}</em>
+      ${sparklineMarkup(def)}
       <div class="bar"><i style="width:${width};background:${qualityColor(def, value)}"></i></div>
     `;
     grid.appendChild(card);
@@ -952,6 +1049,13 @@ function updateDashboard(rawValues) {
 
   document.getElementById("year-label").textContent = `Año ${rawValues.year.toFixed(1)}`;
   document.getElementById("timeline-fill").style.width = `${clamp(rawValues.year / TOTAL_YEARS, 0, 1) * 100}%`;
+  const aqi = estimatedAqi(rawValues.pm25);
+  document.getElementById("hud-acceptance").textContent = Math.round(rawValues.acceptance);
+  document.getElementById("hud-aqi").textContent = aqi;
+  document.getElementById("hud-aqi-label").textContent = aqi <= 50 ? "Buena" : aqi <= 100 ? "Moderada" : aqi <= 150 ? "Da\u00f1ina" : "Muy da\u00f1ina";
+  document.getElementById("hud-emissions").textContent = Math.round(((rawValues.pm25 / baseline.pm25) + (rawValues.nox / baseline.nox) + (rawValues.co2 / baseline.co2)) / 3 * 100);
+  document.getElementById("hud-cost").textContent = fmt(getBudgetUsed(), 0);
+  document.querySelectorAll(".year-node").forEach(node => node.classList.toggle("active", Number(node.dataset.year) === Math.round(rawValues.year)));
 
   const scenario = rawValues.pm25 > 55 || rawValues.stagnation > 85 ? "Crítico" : (rawValues.pm25 > 32 || rawValues.stagnation > 65 ? "Moderado" : "Mejorado");
   document.getElementById("scenario-label").textContent = `${scenario}: ventilación ${rawValues.vent >= 60 ? "alta" : rawValues.vent >= 35 ? "media" : "baja"}, aceptación ${Math.round(rawValues.acceptance)}/100.`;
@@ -2602,18 +2706,49 @@ document.getElementById("btn-resolution").addEventListener("click", () => {
   window.open("https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf", "_blank", "noopener");
 });
 
-window.addEventListener("resize", () => {
-  const a = window.innerWidth / window.innerHeight;
+function resizeRendererToViewport() {
+  const bounds = viewport.getBoundingClientRect();
+  const a = bounds.width / bounds.height;
   camera.left = -cameraSize * a;
   camera.right = cameraSize * a;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(bounds.width, bounds.height);
+}
+window.addEventListener("resize", resizeRendererToViewport);
+
+window.render_game_to_text = () => JSON.stringify({
+  coordinateSystem: "Vista isom\u00e9trica; el estado UI no expone coordenadas de navegaci\u00f3n.",
+  mode: simulationRunning ? "simulating" : "planning",
+  year: Number(currentYear.toFixed(2)),
+  budget: { total: BUDGET, used: getBudgetUsed(), available: BUDGET - getBudgetUsed() },
+  selectedPolicies: [...plannedPolicies],
+  activePolicies: getActiveInstances().map(instance => instance.code),
+  metrics: (() => {
+    const values = calculateValues(currentYear);
+    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, nox: values.nox, o3: values.o3, cov: values.cov, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
+  })()
 });
+
+window.advanceTime = ms => {
+  if (!simulationRunning) return window.render_game_to_text();
+  const years = Math.max(0, ms) / SIMULATION_DURATION;
+  currentYear = Math.min(simulationTargetYear, currentYear + years);
+  if (currentYear >= simulationTargetYear) {
+    simulationRunning = false;
+    document.getElementById("btn-start").textContent = getStartButtonLabel();
+    buildHistory();
+    renderPolicies();
+  }
+  updateDashboard(calculateValues(currentYear));
+  refreshCityForYear(currentYear, true);
+  return window.render_game_to_text();
+};
 
 buildRoadNetwork();
 buildBuildings();
 buildDustClouds();
 await loadRoutes();
+resizeRendererToViewport();
 resetSimulation();
 const debugParams = new URLSearchParams(window.location.search);
 if (debugParams.has("debugPolicies")) {
