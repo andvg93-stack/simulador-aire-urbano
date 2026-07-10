@@ -516,6 +516,14 @@
   .metric-box { min-height:54px; padding:9px; border-color:var(--line); background:rgba(14,47,70,.62); }
   .metric-box span { color:var(--muted); font-size:9px; }
   .metric-box strong { color:#fff; font-size:14px; }
+  .budget-card { grid-column:1/-1; padding:12px 14px; border:1px solid var(--line); border-radius:11px; background:linear-gradient(135deg,rgba(14,49,73,.94),rgba(8,35,57,.92)); }
+  .budget-card > span,.budget-used-row span { color:var(--muted); font-size:10px; }
+  .budget-card > strong { display:block; margin-top:5px; color:#fff; font-size:20px; }
+  .budget-card > strong small { margin-left:4px; color:#9eb4c2; font-size:11px; font-weight:700; }
+  .budget-progress { height:8px; margin:12px 0 11px; overflow:hidden; border-radius:999px; background:rgba(120,166,190,.18); }
+  #budget-available-fill { width:100%; height:100%; border-radius:inherit; background:linear-gradient(90deg,#32db89,#80ebc3); box-shadow:0 0 13px rgba(61,220,145,.5); transition:width 220ms ease; }
+  .budget-used-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .budget-used-row strong { color:#b7c9d5; font-size:11px; }
   #policy-list { padding:10px; scrollbar-color:#2a6178 transparent; }
   .policy-card { padding:12px 40px 12px 49px; margin-bottom:9px; color:var(--ink); border-color:var(--line); border-radius:12px; background:rgba(8,33,55,.9); }
   .policy-card:hover { border-color:rgba(56,214,192,.65); box-shadow:0 8px 20px rgba(0,0,0,.28); }
@@ -576,8 +584,12 @@
       <p>Plan urbano a cinco años con presupuesto, aceptación ciudadana y contaminantes criterio.</p>
     </div>
     <div class="budget-strip">
-      <div class="metric-box"><span>Presupuesto Disponible</span><strong id="budget-left">100</strong></div>
-      <div class="metric-box"><span>Presupuesto Usado</span><strong id="budget-used">0</strong></div>
+      <div class="budget-card">
+        <span>Presupuesto disponible</span>
+        <strong><span id="budget-left">100.000</span><small>M COP</small></strong>
+        <div class="budget-progress" role="progressbar" aria-label="Presupuesto disponible" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="budget-available-fill"></div></div>
+        <div class="budget-used-row"><span>Presupuesto usado</span><strong><span id="budget-used">0</span> M COP (<span id="budget-used-percent">0</span>%)</strong></div>
+      </div>
       <div class="metric-box"><span>Políticas Disponibles</span><strong id="policy-count">0/5</strong></div>
       <div class="metric-box"><span>Políticas En curso</span><strong id="active-count">0</strong></div>
     </div>
@@ -988,8 +1000,16 @@ function renderPolicies() {
     list.appendChild(button);
   });
 
-  document.getElementById("budget-left").textContent = fmtBudget(BUDGET - used);
-  document.getElementById("budget-used").textContent = fmtBudget(used);
+  const available = Math.max(0, BUDGET - used);
+  const availablePercent = clamp(available / BUDGET * 100, 0, 100);
+  const usedPercent = clamp(used / BUDGET * 100, 0, 100);
+  document.getElementById("budget-left").textContent = fmt(available * 1000, 0);
+  document.getElementById("budget-used").textContent = fmt(used * 1000, 0);
+  document.getElementById("budget-used-percent").textContent = fmt(usedPercent, 0);
+  document.getElementById("budget-available-fill").style.width = `${availablePercent}%`;
+  const budgetProgress = document.querySelector(".budget-progress");
+  budgetProgress.setAttribute("aria-valuenow", fmt(availablePercent, 0));
+  budgetProgress.setAttribute("aria-valuetext", `${fmt(available * 1000, 0)} M COP disponibles`);
   document.getElementById("policy-count").textContent = `${count}/${getAvailableSlots() + count}`;
   document.getElementById("active-count").textContent = activeCount;
   updateReportAvailability();
