@@ -1036,24 +1036,26 @@ function updateDashboard(rawValues) {
   });
 
   const grid = document.getElementById("param-grid");
-  grid.innerHTML = "";
   paramDefinitions.forEach(def => {
     const value = values[def.key];
     const ratio = clamp((value - def.min) / (def.max - def.min), 0, 1);
     const width = `${Math.round(ratio * 100)}%`;
-    const card = document.createElement("a");
-    card.className = "param-card";
-    card.href = def.resource;
-    card.target = "_blank";
-    card.rel = "noopener";
-    card.title = `Abrir recurso didáctico de ${def.label}`;
-    card.innerHTML = `
-      <span>${def.label}</span>
-      <strong>${fmt(value, def.digits)}</strong>
-      <em>${def.unit}</em>
-      <div class="bar"><i style="width:${width};background:${qualityColor(def, value)}"></i></div>
-    `;
-    grid.appendChild(card);
+    let card = grid.querySelector(`[data-param="${def.key}"]`);
+    if (!card) {
+      card = document.createElement("a");
+      card.className = "param-card";
+      card.dataset.param = def.key;
+      card.href = def.resource;
+      card.title = `Abrir recurso didáctico de ${def.label}`;
+      card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
+      grid.appendChild(card);
+    }
+    card.querySelector("span").textContent = def.label;
+    card.querySelector("strong").textContent = fmt(value, def.digits);
+    card.querySelector("em").textContent = def.unit;
+    const bar = card.querySelector(".bar i");
+    bar.style.width = width;
+    bar.style.background = qualityColor(def, value);
   });
 
   document.getElementById("year-label").textContent = `Año ${rawValues.year.toFixed(1)}`;
