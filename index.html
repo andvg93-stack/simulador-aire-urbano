@@ -558,6 +558,7 @@
 }
 </script>
 
+<script src="road-layout.js"></script>
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -1034,7 +1035,10 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 viewport.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -1066,13 +1070,19 @@ sun.shadow.camera.left = -110;
 sun.shadow.camera.right = 110;
 sun.shadow.camera.top = 110;
 sun.shadow.camera.bottom = -110;
+sun.shadow.camera.near = 20;
 sun.shadow.camera.far = 260;
-sun.shadow.mapSize.width = 2048;
-sun.shadow.mapSize.height = 2048;
+sun.shadow.mapSize.width = 1024;
+sun.shadow.mapSize.height = 1024;
+sun.shadow.bias = -0.00015;
+sun.shadow.normalBias = 0.035;
 
-const ambient = new THREE.AmbientLight(0xd9ecff, 0.52);
-const hemi = new THREE.HemisphereLight(0x9ed7ff, 0xd2c6ad, 0.42);
-scene.add(sun, ambient, hemi);
+// Luz global económica: cielo/suelo, ambiente y un relleno sin sombras.
+const ambient = new THREE.AmbientLight(0xd9ecff, 0.38);
+const hemi = new THREE.HemisphereLight(0x9ed7ff, 0xb7a98f, 0.68);
+const fillLight = new THREE.DirectionalLight(0xbad8ff, 0.28);
+fillLight.position.set(-65, 45, -50);
+scene.add(sun, ambient, hemi, fillLight);
 
 // --- Nubes ---
 const cloudGroup = new THREE.Group();
@@ -1147,7 +1157,7 @@ let lastPolicyVisualKey = "";
 let lastBuildingDensity = -1;
 let lastDustLevel = -1;
 
-const ROAD_LAYOUT_KEY = "simuladorAireRoadLayout";
+const ROAD_LAYOUT_KEY = "simuladorAireRoadLayoutFinal";
 const ROAD_WIDTH = 6.6;
 const GRID_X = [-48, -24, 0, 24, 48];
 const GRID_Z = [-44, -20, 4, 28, 52];
@@ -1272,6 +1282,7 @@ function normalizeZebras(rawZebras, edgeMap) {
 }
 
 function normalizeLayout(layout) {
+  layout ??= window.DEFAULT_ROAD_LAYOUT;
   const edgeMap = new Map();
   (layout?.edges || defaultRoadEdges()).forEach(edge => {
     const normalized = normalizeEdge(edge);
@@ -1593,7 +1604,7 @@ function addSetbackVolume(group, width, depth, height, material) {
   );
 
   top.position.set(0, yBase + topH / 2, 0);
-  top.castShadow = false;
+  top.castShadow = true;
   top.receiveShadow = true;
   group.add(top);
 
@@ -1612,7 +1623,7 @@ function createBuilding(x, z, width, depth, height, material, rng) {
     material
   );
   body.position.y = height / 2;
-  body.castShadow = false;
+  body.castShadow = true;
   body.receiveShadow = true;
   group.add(body);
 

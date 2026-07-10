@@ -195,8 +195,9 @@
   </section>
 </main>
 
+<script src="road-layout.js"></script>
 <script>
-const ROAD_LAYOUT_KEY = "simuladorAireRoadLayout";
+const ROAD_LAYOUT_KEY = "simuladorAireRoadLayoutFinal";
 const GRID_X = [-48, -24, 0, 24, 48];
 const GRID_Z = [-44, -20, 4, 28, 52];
 const GREEN_ZONE = { x: -36, z: 40, width: 38.8, depth: 18.8 };
@@ -276,6 +277,7 @@ function normalizeEdge(edge) {
 }
 
 function normalizeLayout(raw) {
+  raw ??= window.DEFAULT_ROAD_LAYOUT;
   const edgeMap = new Map();
   (raw?.edges || defaultEdges()).forEach(edge => {
     const normalized = normalizeEdge(edge);
