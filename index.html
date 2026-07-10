@@ -607,9 +607,11 @@
   .icon-button,.action-button { color:#eff6e8; border-color:rgba(182,220,132,.22); background:rgba(24,89,45,.92); }
   .action-button.primary { border-color:#65ad3d; background:linear-gradient(180deg,#58aa35,#367f2c); box-shadow:0 5px 14px rgba(0,0,0,.22); }
   .action-button.tertiary,.action-button.secondary { color:#eff6e8; background:rgba(21,76,42,.94); border-color:rgba(182,220,132,.24); }
-  #monitor-panel { background:linear-gradient(160deg,rgba(59,119,72,.97),rgba(21,78,47,.98)); }
+  #monitor-panel { display:flex; flex-direction:column; overflow:hidden; background:linear-gradient(160deg,rgba(59,119,72,.97),rgba(21,78,47,.98)); }
+  #monitor-panel .panel-head { flex:0 0 auto; }
   #monitor-panel .panel-head h2::before { content:"🌿 "; }
-  #param-grid { max-height:500px; }
+  #param-grid { flex:1 1 auto; min-height:0; max-height:none; overflow:auto; }
+  #insights { flex:0 0 auto; }
   #monitor-panel .param-card { color:#285534; border-color:rgba(235,239,213,.8); background:linear-gradient(145deg,#f4f3df,#e7ebd4); box-shadow:0 6px 14px rgba(4,40,20,.16); }
   #monitor-panel .param-card:hover { border-color:#b8dd72; box-shadow:0 8px 18px rgba(3,42,20,.24); }
   #monitor-panel .param-card span,#monitor-panel .param-card em { color:#507156; }
@@ -625,7 +627,7 @@
   .year-node { color:#e9f2da; background:#315f3e; border-color:#86b86a; }
   .year-node::after { color:#c7d8ba; }
   .year-node.active { color:#214b2c; border-color:#c5ed65; background:#a8dd4e; box-shadow:0 0 18px rgba(183,229,86,.5); }
-  @media(max-width:1180px){ #policy-panel .panel-head{min-height:145px;padding-left:62px} #policy-panel .panel-head::before{left:12px;width:38px;height:38px} #policy-panel .panel-head h1{font-size:19px} #policy-panel .panel-head p{font-size:11px} }
+  @media(max-width:1180px){ #policy-panel .panel-head{min-height:145px;padding-left:62px} #policy-panel .panel-head::before{left:12px;width:38px;height:38px} #policy-panel .panel-head h1{font-size:19px} #policy-panel .panel-head p{font-size:11px} #monitor-panel{display:block;overflow:hidden} #param-grid{max-height:430px} }
   @media(max-width:820px){ #policy-panel .panel-head{min-height:116px;padding-left:72px} #policy-panel .panel-head h1{font-size:21px} }
 </style>
 </head>
