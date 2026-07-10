@@ -1003,13 +1003,18 @@ function qualityColor(def, value) {
   return "var(--bad)";
 }
 
-function sparklineMarkup(def) {
-  const seed = def.key.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const points = Array.from({ length: 8 }, (_, index) => {
-    const wave = Math.sin((index + seed) * 1.7) * 3 + Math.cos((index + seed) * 0.61) * 2;
-    return `${index * 14},${Math.round(10 - wave)}`;
+function sparklineMarkup(def, rawValues) {
+  const endYear = clamp(rawValues.year, 0, TOTAL_YEARS);
+  const samples = Array.from({ length: 8 }, (_, index) => {
+    const sampleYear = endYear * index / 7;
+    return calculateValues(sampleYear)[def.key];
+  });
+  const points = samples.map((sample, index) => {
+    const ratio = clamp((sample - def.min) / (def.max - def.min), 0, 1);
+    return `${index * 14},${(17 - ratio * 14).toFixed(1)}`;
   }).join(" ");
-  return `<svg class="sparkline" viewBox="0 0 98 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="${qualityColor(def, baseline[def.key] ?? def.min)}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const trend = samples.at(-1) > samples[0] ? "ascendente" : samples.at(-1) < samples[0] ? "descendente" : "estable";
+  return `<svg class="sparkline" viewBox="0 0 98 20" preserveAspectRatio="none" role="img" aria-label="Tendencia ${trend} de ${def.label}" data-start="${samples[0]}" data-current="${samples.at(-1)}"><polyline points="${points}" fill="none" stroke="${qualityColor(def, rawValues[def.key])}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 function estimatedAqi(pm25) {
@@ -1041,7 +1046,7 @@ function updateDashboard(rawValues) {
       <span>${def.label}</span>
       <strong>${fmt(value, def.digits)}</strong>
       <em>${def.unit}</em>
-      ${sparklineMarkup(def)}
+      ${sparklineMarkup(def, rawValues)}
       <div class="bar"><i style="width:${width};background:${qualityColor(def, value)}"></i></div>
     `;
     grid.appendChild(card);
