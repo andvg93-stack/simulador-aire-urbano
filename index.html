@@ -1104,12 +1104,12 @@ function updateDashboard(rawValues) {
       card = document.createElement("a");
       card.className = "param-card";
       card.dataset.param = def.key;
-      card.href = def.resource;
       card.title = `Abrir recurso didáctico de ${def.label}`;
       card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
       grid.appendChild(card);
     }
     card.querySelector("span").textContent = def.label;
+    card.href = `${def.resource}?value=${encodeURIComponent(value)}`;
     card.querySelector("strong").textContent = fmt(value, def.digits);
     card.querySelector("em").textContent = def.unit;
     const bar = card.querySelector(".bar i");

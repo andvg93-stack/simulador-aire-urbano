@@ -1,12 +1,1 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CO2</title>
-<style>
-body{margin:0;font-family:Segoe UI,Arial,sans-serif;color:#17202a;background:#edf3f7}main{max-width:900px;margin:auto;padding:28px;display:grid;gap:18px}.panel{background:#fff;border:1px solid #d7dee2;border-radius:8px;padding:18px}h1{font-size:34px;margin:0}.city{height:260px;border-radius:8px;background:linear-gradient(#cfe1ec,#eef3f7);position:relative;overflow:hidden}.building{position:absolute;bottom:0;width:70px;background:#8ea6b2}.bubble{position:absolute;border-radius:50%;background:rgba(87,99,107,.32);display:grid;place-items:center;font-weight:800}input{width:100%}
-</style>
-</head>
-<body><main><header><h1>CO₂</h1><p>El dióxido de carbono ayuda a estimar combustión y actividad vehicular, aunque no es el contaminante criterio local más tóxico a estas escalas.</p></header><section class="panel"><label for="traffic"><strong>Tráfico urbano</strong></label><input id="traffic" type="range" min="0" max="100" value="55"><p>CO₂ estimado: <strong id="ppm">496</strong> ppm</p><div id="city" class="city"><div class="building" style="left:70px;height:110px"></div><div class="building" style="left:180px;height:170px"></div><div class="building" style="left:310px;height:130px"></div><div class="building" style="left:470px;height:200px"></div></div></section></main><script>
-const traffic=document.getElementById("traffic"),ppm=document.getElementById("ppm"),city=document.getElementById("city");function render(){const t=Number(traffic.value);ppm.textContent=Math.round(410+t*1.7);city.querySelectorAll(".bubble").forEach(b=>b.remove());for(let i=0;i<5+t/8;i++){const b=document.createElement("div");b.className="bubble";const s=24+Math.random()*42;b.style.width=b.style.height=`${s}px`;b.style.left=`${Math.random()*88}%`;b.style.top=`${Math.random()*62}%`;b.textContent=i%3===0?"CO₂":"";city.appendChild(b)}}traffic.addEventListener("input",render);render();
-</script><script src="recurso-volver.js"></script></body></html>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Recurso educativo: CO₂</title><link rel="stylesheet" href="recurso-didactico.css?v=2"></head><body data-resource="co2"><main id="resource-app"></main><script src="recurso-didactico.js?v=2"></script></body></html>
