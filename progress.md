@@ -51,3 +51,15 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Integración: las 12 tarjetas del simulador transfieren su valor actual mediante `?value=` y conservan una sola navegación de regreso.
 - Accesibilidad: controles etiquetados, SVG con nombre accesible, IDs únicos y cero errores de consola.
 - Pendientes conocidos: ninguno dentro del alcance de los 12 recursos enlazados; las dos páginas combinadas antiguas continúan fuera de navegación.
+
+## Cierre del año 5 y retroalimentación
+
+- Solicitud activa: destacar claramente "Exportar reporte" al finalizar el año 5 y enriquecer el reporte de un plan no aceptable con fortalezas, aspectos por mejorar y pautas concretas.
+- Decisión: la llamada visual se activará solo cuando el reporte esté realmente disponible y respetará la preferencia de movimiento reducido.
+- Decisión: la retroalimentación se calculará con los mismos criterios técnicos usados para clasificar el plan, evitando mensajes genéricos.
+- Implementado: botón final con contraste luminoso, marca de verificación, pulso breve, etiqueta accesible y desplazamiento automático de la barra de acciones en móvil.
+- Implementado: la exportación anticipada queda bloqueada y `render_game_to_text` informa disponibilidad y estado del reporte.
+- Implementado: el resultado no aceptable distingue avances, metas incumplidas con cifras y recomendaciones por contaminante, exposición, aceptación, equidad, ozono y tiempo de implementación.
+- Verificación: flujo completo sin políticas, plan no aceptable P3 y plan aceptable P1+P2; exportación anticipada bloqueada y cero errores de consola.
+- Verificación visual: año 5 y reporte revisados en 1440×900, 1100×800 y 390×844; el botón queda completamente visible en móvil y el reporte no tiene desbordamiento horizontal.
+- Pendientes conocidos: ninguno dentro de este alcance.
