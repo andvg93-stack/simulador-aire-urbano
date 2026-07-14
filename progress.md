@@ -63,3 +63,14 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación: flujo completo sin políticas, plan no aceptable P3 y plan aceptable P1+P2; exportación anticipada bloqueada y cero errores de consola.
 - Verificación visual: año 5 y reporte revisados en 1440×900, 1100×800 y 390×844; el botón queda completamente visible en móvil y el reporte no tiene desbordamiento horizontal.
 - Pendientes conocidos: ninguno dentro de este alcance.
+
+## Rediseño editorial del reporte
+
+- Solicitud activa: aproximar el reporte final al dashboard editorial de la referencia, permitiendo varias hojas impresas cuando sea necesario.
+- Implementado: plantilla unificada para estados aceptable, parcial y no aceptable, con cabecera, resumen, KPIs, gráficas normalizadas, tabla comparativa, diagnóstico, políticas, impacto global y nota final.
+- Implementado: diseño responsivo y reglas de impresión A4 con transición de página controlada antes del bloque social y térmico.
+- Implementado: acciones de volver y guardar ubicadas fuera del reporte para no cubrir información; los planes aceptables muestran aspectos a sostener en lugar de una falsa debilidad.
+- Verificación funcional: estados aceptable (P1+P2), parcialmente aceptable (P1+P10+P4) y no aceptable (P3), sin errores de consola.
+- Verificación visual: reporte completo revisado a 1280 px y 390 px; sin desbordamiento global y con tablas desplazables en móvil.
+- Verificación PDF: salida A4 de dos páginas renderizada y revisada para planes aceptables y no aceptables; sin recortes, superposiciones ni glifos defectuosos.
+- Pendientes conocidos: ninguno dentro del rediseño del reporte.
