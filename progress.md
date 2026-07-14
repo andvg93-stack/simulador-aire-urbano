@@ -74,3 +74,9 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación visual: reporte completo revisado a 1280 px y 390 px; sin desbordamiento global y con tablas desplazables en móvil.
 - Verificación PDF: salida A4 de dos páginas renderizada y revisada para planes aceptables y no aceptables; sin recortes, superposiciones ni glifos defectuosos.
 - Pendientes conocidos: ninguno dentro del rediseño del reporte.
+
+## Reporte de ejemplo
+
+- Generado con P1, P2 y P3: presupuesto 95/100, tres políticas y resultado parcialmente aceptable.
+- Artefactos: PDF A4 de dos páginas, vista completa en pantalla y previsualizaciones PNG de cada página en `output/pdf/`.
+- Verificación: datos equivalentes a la referencia, dos páginas A4 confirmadas y revisión visual sin recortes, superposiciones ni errores de consola.
