@@ -339,6 +339,53 @@
     cursor: not-allowed;
   }
 
+  #btn-report.report-ready {
+    position: relative;
+    z-index: 1;
+    color: #17351f;
+    border-color: #e9f78c;
+    background: linear-gradient(180deg, #d9f56f, #9ed54d);
+    box-shadow: 0 0 0 3px rgba(217, 245, 111, 0.3), 0 0 24px rgba(217, 245, 111, 0.85), 0 8px 18px rgba(4, 42, 20, 0.28);
+    animation: report-attention 1.35s ease-in-out 3;
+  }
+
+  #btn-report.report-ready::before {
+    content: "✓";
+    display: inline-grid;
+    width: 20px;
+    height: 20px;
+    margin-right: 7px;
+    place-items: center;
+    border-radius: 50%;
+    color: #efffdc;
+    background: #397d2e;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  @keyframes report-attention {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 3px rgba(217, 245, 111, 0.3), 0 0 22px rgba(217, 245, 111, 0.72), 0 8px 18px rgba(4, 42, 20, 0.28);
+    }
+    50% {
+      transform: scale(1.07);
+      box-shadow: 0 0 0 7px rgba(217, 245, 111, 0.18), 0 0 34px rgba(229, 255, 128, 1), 0 10px 24px rgba(4, 42, 20, 0.34);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #btn-report.report-ready {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 820px) {
+    #top-panel .actions > * {
+      flex: 0 0 auto;
+    }
+  }
+
   #monitor-panel {
     grid-column: 3;
     grid-row: 1 / span 2;
@@ -988,6 +1035,74 @@ function evaluatePlan(values) {
   return { status, tone, failures, criteria, budgetOk };
 }
 
+function buildPlanFeedback(evaluation, final, implemented) {
+  const percent = value => `${fmt(value * 100, 1)}%`;
+  const reductions = [
+    { label: "PM2.5", value: reduction("pm25", final) },
+    { label: "PM10", value: reduction("pm10", final) },
+    { label: "NOx", value: reduction("nox", final) },
+    { label: "la exposición de la población", value: reduction("exposure", final) }
+  ];
+  const strengths = reductions
+    .filter(item => item.value > 0.005)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 2)
+    .map(item => `Lograste reducir ${item.label} en ${percent(item.value)} frente al escenario inicial.`);
+
+  if (evaluation.budgetOk) {
+    strengths.push(`Mantuviste la inversión dentro del presupuesto disponible (${fmt(getBudgetUsed(), 0)} de ${fmt(BUDGET, 0)} M COP).`);
+  }
+  if (final.acceptance >= 50) {
+    strengths.push(`Conservaste una aceptación ciudadana de ${fmt(final.acceptance, 0)}/100, cumpliendo el mínimo esperado.`);
+  }
+  if (!strengths.length) {
+    strengths.push("Completaste los cinco años y generaste evidencia para revisar las decisiones del plan.");
+  }
+
+  const weaknessMessages = {
+    "PM2.5": `La reducción de PM2.5 fue ${percent(reduction("pm25", final))}; la meta era al menos 30%.`,
+    "PM10": `La reducción de PM10 fue ${percent(reduction("pm10", final))}; la meta era al menos 20%.`,
+    "NOx": `La reducción de NOx fue ${percent(reduction("nox", final))}; la meta era al menos 25%.`,
+    "Exposición": `La reducción de la exposición fue ${percent(reduction("exposure", final))}; la meta era al menos 20%.`,
+    "Aceptación": `La aceptación terminó en ${fmt(final.acceptance, 0)}/100; el mínimo esperado era 50.`,
+    "Equidad interna": `El indicador de equidad terminó en ${fmt(final.equity, 0)}/100; el mínimo esperado era 55.`,
+    "O₃": `El ozono cambió ${percent((final.o3 - baseline.o3) / baseline.o3)}; no debía aumentar más de 5%.`
+  };
+  const weaknesses = evaluation.failures.map(item => weaknessMessages[item.label]);
+  if (!evaluation.budgetOk) {
+    weaknesses.unshift(`La inversión superó el presupuesto: ${fmt(getBudgetUsed(), 0)} de ${fmt(BUDGET, 0)} M COP.`);
+  }
+
+  const failedLabels = new Set(evaluation.failures.map(item => item.label));
+  const guidance = [];
+  if (failedLabels.has("PM2.5") || failedLabels.has("NOx")) {
+    guidance.push("Combina medidas de transporte limpio y reducción del tráfico (P1, P2, P4 o P9), en vez de depender de una sola intervención.");
+  }
+  if (failedLabels.has("PM10")) {
+    guidance.push("Incluye control de obras y polvo (P7) y refuérzalo con arborización o corredores de ventilación (P5 o P6).");
+  }
+  if (failedLabels.has("Exposición")) {
+    guidance.push("Acompaña la reducción de emisiones con alertas y gestión de la exposición (P10), especialmente para población vulnerable.");
+  }
+  if (failedLabels.has("Aceptación") || failedLabels.has("Equidad interna")) {
+    guidance.push("Equilibra las restricciones con medidas de beneficio visible y acceso amplio, como P2, P4, P5 o P10.");
+  }
+  if (failedLabels.has("O₃")) {
+    guidance.push("Controla los COV con P8 y revisa el balance entre reducciones de NOx y precursores de ozono.");
+  }
+  if (implemented.some(policy => policy.endYear > TOTAL_YEARS)) {
+    guidance.push("Implementa las políticas de tres o cinco años desde las primeras rondas para que alcancen su efecto completo antes del cierre.");
+  }
+  if (!implemented.length) {
+    guidance.push("Empieza con una combinación que cubra emisiones, exposición y aceptación; luego observa los indicadores antes de la siguiente ronda.");
+  }
+  if (!guidance.length) {
+    guidance.push("Revisa los criterios que quedaron cerca de la meta y ajusta una política a la vez para identificar su aporte.");
+  }
+
+  return { strengths, weaknesses, guidance };
+}
+
 function getInsights(values) {
   const trafficScore = (values.nox / baseline.nox) + (values.co2 / baseline.co2) + (values.pm25 / baseline.pm25);
   const dustScore = values.pm10 / baseline.pm10;
@@ -1104,12 +1219,12 @@ function updateDashboard(rawValues) {
       card = document.createElement("a");
       card.className = "param-card";
       card.dataset.param = def.key;
-      card.href = def.resource;
       card.title = `Abrir recurso didáctico de ${def.label}`;
       card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
       grid.appendChild(card);
     }
     card.querySelector("span").textContent = def.label;
+    card.href = `${def.resource}?value=${encodeURIComponent(value)}`;
     card.querySelector("strong").textContent = fmt(value, def.digits);
     card.querySelector("em").textContent = def.unit;
     const bar = card.querySelector(".bar i");
@@ -1142,10 +1257,18 @@ function updateDashboard(rawValues) {
 function updateReportAvailability() {
   const button = document.getElementById("btn-report");
   const ready = currentYear >= TOTAL_YEARS && !simulationRunning;
+  const becameReady = ready && !button.classList.contains("report-ready");
   button.classList.toggle("disabled", !ready);
+  button.classList.toggle("report-ready", ready);
   button.setAttribute("aria-disabled", ready ? "false" : "true");
+  button.setAttribute("aria-label", ready ? "Simulación terminada. Exportar reporte final" : "Exportar reporte, disponible al completar los 5 años");
   button.title = ready ? "Abrir reporte final" : "Disponible al completar los 5 años";
+  button.textContent = ready ? "Exportar reporte →" : "Exportar reporte";
   button.href = ready ? "reporte-final.html" : "#";
+  if (becameReady) {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    button.parentElement.scrollTo({ left: button.parentElement.scrollWidth, behavior: reduceMotion ? "auto" : "smooth" });
+  }
   if (ready) {
     const signature = `${policyInstances.length}:${getBudgetUsed()}:${state.history.length}:${Math.round(calculateValues(TOTAL_YEARS).pm25 * 10)}`;
     if (signature !== reportSignature) {
@@ -2556,22 +2679,39 @@ function debugApplyPoliciesForYear(codes, year = 1) {
 }
 
 function createReportChart(seriesKeys, values) {
-  const colors = { pm25: "#be3a34", pm10: "#b77800", co2: "#57636b", nox: "#2563a8", o3: "#047a7a", cov: "#7c4d9e", temp: "#a74322", exposure: "#1b8a5a", acceptance: "#3949ab" };
-  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "CO₂", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temp.", exposure: "Exposición", acceptance: "Aceptación" };
-  const w = 860;
-  const h = 260;
-  const pad = 42;
-  let svg = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="260"><rect width="${w}" height="${h}" fill="#fff"/><line x1="${pad}" y1="${h - pad}" x2="${w - 20}" y2="${h - pad}" stroke="#ccd3d8"/><line x1="${pad}" y1="20" x2="${pad}" y2="${h - pad}" stroke="#ccd3d8"/>`;
-  seriesKeys.forEach((key, idx) => {
-    const base = values[0][key];
-    const points = values.map(item => {
-      const x = pad + (item.year / TOTAL_YEARS) * (w - pad - 20);
-      const rel = clamp(item[key] / base, 0.25, 1.2);
-      const y = 20 + (1 - ((rel - 0.25) / 0.95)) * (h - pad - 20);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-    svg += `<polyline points="${points}" fill="none" stroke="${colors[key]}" stroke-width="3"/>`;
-    svg += `<text x="${pad + idx * 82}" y="${h - 10}" fill="${colors[key]}" font-size="12" font-weight="700">${labels[key]}</text>`;
+  const colors = { pm25: "#ed2f2f", pm10: "#ef8b00", co2: "#69777f", nox: "#175bc9", o3: "#08a89c", cov: "#8d49b6", temp: "#ed2f2f", exposure: "#2d983f", acceptance: "#175bc9" };
+  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "CO₂", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temperatura", exposure: "Exposición", acceptance: "Aceptación" };
+  const w = 720;
+  const h = 300;
+  const plot = { left: 52, right: 16, top: 18, bottom: 68 };
+  const plotWidth = w - plot.left - plot.right;
+  const plotHeight = h - plot.top - plot.bottom;
+  const yFor = normalized => plot.top + (120 - clamp(normalized, 0, 120)) / 120 * plotHeight;
+  let svg = `<svg class="report-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Evolución entre el año inicial y el año 5">`;
+
+  [0, 20, 40, 60, 80, 100, 120].forEach(level => {
+    const y = yFor(level);
+    svg += `<line x1="${plot.left}" y1="${y}" x2="${w - plot.right}" y2="${y}" stroke="#dce7ec" stroke-dasharray="4 4"/>`;
+    svg += `<text x="${plot.left - 10}" y="${y + 4}" text-anchor="end" fill="#536773" font-size="11">${level}</text>`;
+  });
+  values.forEach(item => {
+    const x = plot.left + (item.year / TOTAL_YEARS) * plotWidth;
+    svg += `<text x="${x}" y="${h - 42}" text-anchor="middle" fill="#304853" font-size="11">${item.year === 0 ? "Inicial" : `Año ${item.year}`}</text>`;
+  });
+  svg += `<line x1="${plot.left}" y1="${plot.top}" x2="${plot.left}" y2="${plot.top + plotHeight}" stroke="#aebfc8"/><line x1="${plot.left}" y1="${plot.top + plotHeight}" x2="${w - plot.right}" y2="${plot.top + plotHeight}" stroke="#aebfc8"/>`;
+
+  seriesKeys.forEach((key, index) => {
+    const base = values[0][key] || 1;
+    const coordinates = values.map(item => {
+      const x = plot.left + (item.year / TOTAL_YEARS) * plotWidth;
+      const y = yFor(item[key] / base * 100);
+      return { x, y };
+    });
+    const points = coordinates.map(point => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+    svg += `<polyline points="${points}" fill="none" stroke="${colors[key]}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+    svg += coordinates.map(point => `<circle cx="${point.x}" cy="${point.y}" r="2.7" fill="${colors[key]}"/>`).join("");
+    const legendX = 54 + index * ((w - 108) / seriesKeys.length);
+    svg += `<line x1="${legendX}" y1="${h - 13}" x2="${legendX + 20}" y2="${h - 13}" stroke="${colors[key]}" stroke-width="3"/><text x="${legendX + 26}" y="${h - 9}" fill="#203843" font-size="11">${labels[key]}</text>`;
   });
   svg += "</svg>";
   return svg;
@@ -2591,85 +2731,204 @@ function buildReportHtml() {
   const final = values[values.length - 1];
   const evaluation = evaluatePlan(final);
   const implemented = getImplementedPolicies();
-
-  if (evaluation.status === "No aceptable") {
-    return `
-      <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte final - Plan no aceptable</title>
-      <style>
-        body{font-family:Segoe UI,Arial,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;color:#17202a;background:#f7f9fa}
-        main{max-width:620px;background:#fff;border:1px solid #d7dee2;border-radius:8px;padding:28px;box-shadow:0 16px 38px rgba(26,37,45,.14)}
-        h1{margin:0 0 10px;font-size:28px}.status{display:inline-block;margin-bottom:16px;padding:6px 10px;border-radius:999px;color:#fff;background:#be3a34;font-weight:800}
-        p{font-size:16px;line-height:1.5}button{margin-top:12px;padding:10px 14px;border:0;border-radius:7px;color:#fff;background:#1b8a5a;font-weight:800;cursor:pointer}
-      </style></head><body><main>
-        <h1>Reporte final del simulador</h1>
-        <div class="status">No aceptable</div>
-        <p>Las políticas implementadas no fueron adecuadas para mejorar la situación.</p>
-        <button onclick="location.href='index.html'">Volver a repetir la simulación desde el inicio</button>
-      </main></body></html>
-    `;
-  }
-
-  const rows = [
-    ["PM2.5", initial.pm25, final.pm25, "µg/m³", 1],
-    ["PM10", initial.pm10, final.pm10, "µg/m³", 1],
-    ["CO₂", initial.co2, final.co2, "ppm", 0],
-    ["NOx", initial.nox, final.nox, "ppb", 0],
-    ["O₃", initial.o3, final.o3, "ppb", 1],
-    ["COV", initial.cov, final.cov, "µg/m³", 1],
-    ["Temperatura", initial.temp, final.temp, "°C", 1],
-    ["Exposición", initial.exposure, final.exposure, "hab.", 0],
-    ["Aceptación", initial.acceptance, final.acceptance, "0-100", 0]
+  const feedback = buildPlanFeedback(evaluation, final, implemented);
+  const averageReduction = ["pm25", "pm10", "co2", "nox", "cov"].reduce((total, key) => total + reduction(key, final), 0) / 5;
+  const exposureReduction = reduction("exposure", final);
+  const ozoneIncrease = (final.o3 - baseline.o3) / baseline.o3;
+  const impactParts = [
+    clamp(reduction("pm25", final) / 0.30, 0, 1),
+    clamp(reduction("pm10", final) / 0.20, 0, 1),
+    clamp(reduction("nox", final) / 0.25, 0, 1),
+    clamp(exposureReduction / 0.20, 0, 1),
+    clamp(final.acceptance / 50, 0, 1),
+    clamp(final.equity / 55, 0, 1),
+    clamp(1 - Math.max(0, ozoneIncrease - 0.05) / 0.10, 0, 1)
   ];
-  const strengths = [
-    reduction("pm25", final) >= 0.15 ? "Reducción de PM2.5 respecto al caso inicial." : null,
-    reduction("exposure", final) > 0 ? "Menor exposición poblacional acumulada." : null
-  ].filter(Boolean);
-  const weaknesses = evaluation.failures.filter(item => !item.internal).map(item => item.label);
-  const hiddenWeaknessCount = evaluation.failures.length - weaknesses.length;
-  const diagnosticText = weaknesses.length
-    ? `Fortalezas: reducción acumulada de emisiones y exposición según políticas activas. Debilidades pendientes: ${weaknesses.join(", ")}.`
-    : (hiddenWeaknessCount > 0
-      ? "El plan mejora los indicadores visibles, pero no cumple todos los criterios internos de balance técnico."
-      : "El plan cumple presupuesto, metas ambientales y aceptación al cierre del año 5.");
-  const weaknessItems = weaknesses.length
-    ? weaknesses
-    : (hiddenWeaknessCount > 0
-      ? ["No cumple todos los criterios internos de balance técnico."]
-      : ["No se identifican criterios fallidos al año 5."]);
+  const impactScore = Math.round(impactParts.reduce((total, value) => total + value, 0) / impactParts.length * 100);
+  const statusColors = { good: "#239548", warn: "#e29308", bad: "#cc423a" };
+  const statusColor = statusColors[evaluation.tone];
+  const reportDate = new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const summaryText = evaluation.status === "Aceptable"
+    ? "Las políticas implementadas alcanzaron las metas ambientales y sociales previstas para el cierre del año 5."
+    : evaluation.status === "Parcialmente aceptable"
+      ? "La gestión produjo avances importantes, aunque todavía quedan criterios por consolidar para lograr un plan equilibrado."
+      : "El plan produjo algunos avances, pero no alcanzó el equilibrio ambiental y social necesario al finalizar el año 5.";
+  const finalNote = evaluation.status === "Aceptable"
+    ? "El escenario muestra una mejora integral. Conviene sostener las medidas, monitorear sus efectos y proteger los logros alcanzados."
+    : evaluation.status === "Parcialmente aceptable"
+      ? "El escenario avanza en la dirección correcta. El siguiente paso es reforzar los criterios pendientes sin perder aceptación ni equidad."
+      : "El resultado no es un error del simulador: señala qué metas necesitan una combinación más sólida de políticas y una implementación más temprana.";
+  const fallbackRecommendations = [
+    "Mantener el monitoreo anual y ajustar una medida a la vez para reconocer su aporte.",
+    "Equilibrar reducción de emisiones, exposición, aceptación y equidad en cada nueva decisión.",
+    "Comparar los indicadores del año siguiente antes de comprometer el presupuesto restante."
+  ];
+  const recommendations = [...new Set([...feedback.guidance, ...fallbackRecommendations])].slice(0, 3);
+  const hasWeaknesses = feedback.weaknesses.length > 0;
+  const weaknesses = feedback.weaknesses.length
+    ? feedback.weaknesses.slice(0, 3)
+    : ["Mantener el balance técnico alcanzado y verificar que los resultados se sostengan después del año 5."];
+  const rows = [
+    { key: "pm25", label: "PM2.5", start: initial.pm25, end: final.pm25, unit: "µg/m³", digits: 1 },
+    { key: "pm10", label: "PM10", start: initial.pm10, end: final.pm10, unit: "µg/m³", digits: 1 },
+    { key: "co2", label: "CO₂", start: initial.co2, end: final.co2, unit: "ppm", digits: 0 },
+    { key: "nox", label: "NOx", start: initial.nox, end: final.nox, unit: "ppb", digits: 0 },
+    { key: "o3", label: "O₃", start: initial.o3, end: final.o3, unit: "ppb", digits: 1 },
+    { key: "cov", label: "COV", start: initial.cov, end: final.cov, unit: "µg/m³", digits: 1 },
+    { key: "temp", label: "Temperatura", start: initial.temp, end: final.temp, unit: "°C", digits: 1 },
+    { key: "exposure", label: "Exposición", start: initial.exposure, end: final.exposure, unit: "hab.", digits: 0 },
+    { key: "acceptance", label: "Aceptación", start: initial.acceptance, end: final.acceptance, unit: "0-100", digits: 0 }
+  ];
+  const changeText = (start, end) => {
+    const change = (end - start) / start * 100;
+    return `${change > 0 ? "+" : ""}${fmt(change, 1)}%`;
+  };
+  const changeTone = row => {
+    const change = row.end - row.start;
+    if (Math.abs(change) < 0.0001) return "neutral";
+    if (row.key === "acceptance") return change > 0 ? "positive" : "negative";
+    return change < 0 ? "positive" : "negative";
+  };
+  const chartSummary = keys => keys.map(key => {
+    const row = rows.find(item => item.key === key);
+    return `<div><span>${row.label}</span><strong class="${changeTone(row)}">${changeText(row.start, row.end)}</strong></div>`;
+  }).join("");
+  const impactLabel = impactScore >= 85 ? "Impacto alto" : impactScore >= 65 ? "Mejora considerable" : impactScore >= 45 ? "Avance limitado" : "Requiere replanteamiento";
+  const policyRows = implemented.length ? implemented : [{ code: "-", name: "Sin políticas implementadas", cost: 0, startYear: "-", endYear: "-" }];
 
   return `
-    <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte final - Simulador de calidad de aire</title>
+  <!DOCTYPE html>
+  <html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte final - Simulador de calidad de aire</title>
     <style>
-      body{font-family:Segoe UI,Arial,sans-serif;margin:28px;color:#17202a;background:#f7f9fa}
-      h1{margin:0 0 4px;font-size:28px} h2{margin:24px 0 10px;font-size:19px}
-      .status{display:inline-block;padding:6px 10px;border-radius:999px;color:#fff;background:${evaluation.tone === "good" ? "#1b8a5a" : "#b77800"};font-weight:800}
-      table{width:100%;border-collapse:collapse;background:#fff;margin-top:10px} th,td{border:1px solid #d7dee2;padding:8px;text-align:left;font-size:13px} th{background:#eaf0f2}
-      .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.box{background:#fff;border:1px solid #d7dee2;border-radius:8px;padding:12px}
-      @media print{body{background:#fff;margin:14mm}.no-print{display:none}.box{break-inside:avoid}}
-    </style></head><body>
-    <button class="no-print" onclick="window.print()" style="float:right;padding:8px 12px">Guardar como PDF</button>
-    <h1>Reporte final del simulador</h1>
-    <div class="status">${evaluation.status}</div>
-    <p>Presupuesto usado: <strong>${getBudgetUsed()} / ${BUDGET}</strong>. Políticas implementadas: <strong>${implemented.length}</strong>.</p>
-    <h2>Diagnóstico técnico</h2>
-    <p>${diagnosticText}</p>
-    <h2>Evolución de contaminantes</h2>
-    <div class="box">${createReportChart(["pm25", "pm10", "co2", "nox", "o3", "cov"], values)}</div>
-    <h2>Evolución social y térmica</h2>
-    <div class="box">${createReportChart(["temp", "exposure", "acceptance"], values)}</div>
-    <h2>Valores iniciales y finales</h2>
-    <table><thead><tr><th>Variable</th><th>Inicial</th><th>Final año 5</th><th>Cambio</th><th>Unidad</th></tr></thead><tbody>
-      ${rows.map(([label, start, end, unit, digits]) => `<tr><td>${label}</td><td>${fmt(start, digits)}</td><td>${fmt(end, digits)}</td><td>${fmt(((end - start) / start) * 100, 1)}%</td><td>${unit}</td></tr>`).join("")}
-    </tbody></table>
-    <div class="grid">
-      <div class="box"><h2>Fortalezas</h2><ul>${(strengths.length ? strengths : ["El plan requiere más medidas para mostrar fortalezas técnicas claras."]).map(item => `<li>${item}</li>`).join("")}</ul></div>
-      <div class="box"><h2>Debilidades</h2><ul>${weaknessItems.map(item => `<li>${item}</li>`).join("")}</ul></div>
+      :root{--navy:#082f3a;--ink:#102d38;--muted:#536b76;--line:#d7e3e8;--green:#239548;--green-soft:#eff9f2;--orange:#ef9300;--orange-soft:#fff8ec;--blue:#1764d4;--blue-soft:#f1f7ff}
+      *{box-sizing:border-box}
+      html{background:#eef3f5}
+      body{margin:0;color:var(--ink);font-family:Inter,"Segoe UI",Arial,sans-serif;background:radial-gradient(circle at 20% 0,#fff 0,#f3f7f8 48%,#e9f0f2 100%);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .report-actions{position:relative;z-index:10;width:min(1120px,calc(100% - 32px));display:flex;justify-content:flex-end;gap:8px;margin:14px auto -8px}
+      .report-actions button{padding:11px 15px;border:1px solid #bdd2c4;border-radius:9px;color:#fff;background:#168548;box-shadow:0 8px 22px rgba(4,47,26,.22);font-weight:800;cursor:pointer}
+      .report-actions .back{color:var(--ink);background:#fff;border-color:var(--line)}
+      .report{width:min(1120px,calc(100% - 32px));margin:22px auto;padding:28px;background:rgba(255,255,255,.97);border-radius:20px;box-shadow:0 18px 55px rgba(21,51,62,.10)}
+      .report-header{display:grid;grid-template-columns:1.5fr .9fr;gap:22px;align-items:center;margin-bottom:20px}
+      .brand{display:flex;gap:18px;align-items:center}.brand-mark{width:74px;height:74px;display:grid;place-items:center;flex:0 0 auto;border-radius:17px;background:linear-gradient(145deg,#dcf5df,#a8dcae)}
+      .brand-mark svg{width:52px;height:52px}.brand h1{margin:0;color:#062f39;font-family:"Arial Narrow","Segoe UI",Arial,sans-serif;font-size:38px;line-height:1;text-transform:uppercase;letter-spacing:-.8px}
+      .brand-subtitle{display:flex;gap:10px;align-items:center;margin-top:8px;color:#239548;font-size:22px;font-weight:700}.status{padding:5px 9px;border-radius:999px;color:#fff;background:${statusColor};font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+      .header-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}.header-stat{min-height:92px;padding:14px;border:1px solid var(--line);border-radius:11px;background:#fff;box-shadow:0 3px 12px rgba(25,57,70,.04)}
+      .stat-head{display:flex;gap:10px;align-items:center;color:#263f49;font-size:12px}.stat-icon{width:32px;height:32px;display:grid;place-items:center;border-radius:9px;color:#fff;background:#126b3d;font-size:18px;font-weight:900}.header-stat strong{display:block;margin:5px 0 0 42px;font-size:22px}.header-stat small{display:block;margin:5px 0 0 42px;color:var(--muted)}
+      .progress{height:8px;margin:10px 0 0 42px;overflow:hidden;border-radius:999px;background:#e7edef}.progress i{display:block;width:${clamp(getBudgetUsed()/BUDGET,0,1)*100}%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#249844,#71c96e)}
+      .summary-grid{display:grid;grid-template-columns:.76fr 1.24fr;gap:16px;margin-bottom:16px}.card{border:1px solid var(--line);border-radius:11px;background:#fff;box-shadow:0 2px 10px rgba(27,59,70,.035)}
+      .executive{padding:18px}.section-title{display:flex;gap:9px;align-items:center;margin:0 0 14px;color:#0a3541;font-family:"Arial Narrow","Segoe UI",Arial,sans-serif;font-size:17px;text-transform:uppercase;letter-spacing:.2px}.section-title .title-icon{width:26px;height:26px;display:grid;place-items:center;border-radius:7px;color:#fff;background:#0a4a59;font-family:"Segoe UI",Arial,sans-serif;font-size:14px}
+      .executive>p{margin:0 0 14px;line-height:1.55}.executive-point{display:grid;grid-template-columns:25px 1fr;gap:10px;margin-top:12px;line-height:1.45}.point-icon{width:22px;height:22px;display:grid;place-items:center;border-radius:50%;color:#fff;background:var(--green);font-size:12px;font-weight:900}.point-icon.warn{border-radius:6px;background:var(--orange)}
+      .kpi-panel{padding:18px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.kpi{min-height:154px;padding:14px 9px;text-align:center;border:1px solid var(--line);border-radius:9px;background:linear-gradient(180deg,#fff,#fbfdfe)}.kpi span{display:block;min-height:34px;color:#29434e;font-size:11px;line-height:1.35}.kpi strong{display:block;margin-top:8px;font-size:25px;line-height:1.05}.kpi small{display:block;margin-top:5px;color:var(--muted);font-size:10px}.kpi-symbol{margin-top:12px;color:var(--green);font-size:26px;font-weight:900}.kpi:nth-child(3) .kpi-symbol{color:${final.acceptance >= 50 ? "#239548" : "#ef9300"}}.kpi:nth-child(4) .kpi-symbol{color:var(--blue)}
+      .analysis-grid{display:grid;grid-template-columns:1.08fr .92fr;gap:16px;margin-bottom:16px}.chart-card,.table-card{padding:16px;overflow:hidden}.report-chart{display:block;width:100%;height:auto;margin-top:2px}
+      .chart-summary{display:grid;border:1px solid var(--line);border-radius:7px;overflow:hidden}.chart-summary.six{grid-template-columns:repeat(6,1fr)}.chart-summary.three{grid-template-columns:repeat(3,1fr)}.chart-summary div{padding:7px 5px;text-align:center;border-right:1px solid var(--line);background:#f8fbfc}.chart-summary div:last-child{border-right:0}.chart-summary span{display:block;color:var(--muted);font-size:9px}.chart-summary strong{display:block;margin-top:3px;font-size:12px}.positive{color:#168844}.negative{color:#cf3c36}.neutral{color:#536b76}
+      table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px 8px;border:1px solid var(--line);text-align:left;vertical-align:top}th{color:#183946;background:#eef4f6;font-weight:800}tbody tr:nth-child(even){background:#fbfdfe}.numeric{text-align:center;white-space:nowrap}
+      .insight-stack{display:grid;grid-template-columns:1fr 1fr;gap:12px}.insight{padding:15px}.insight.good{border-color:#cbe5d2;background:linear-gradient(135deg,#f3fbf5,#fff)}.insight.bad{border-color:#f2dcc1;background:linear-gradient(135deg,#fff9f0,#fff)}.insight.recommend{grid-column:1/-1;border-color:#c9dcf6;background:linear-gradient(135deg,#f3f8ff,#fff)}
+      .insight h3{display:flex;gap:8px;align-items:center;margin:0 0 10px;font-family:"Arial Narrow","Segoe UI",Arial,sans-serif;font-size:17px;text-transform:uppercase}.insight.good h3{color:#218846}.insight.bad h3{color:#dc6d00}.insight.recommend h3{color:#155ab4}.insight ul{margin:0;padding-left:19px}.insight li{margin:7px 0;line-height:1.4}
+      .policies{padding:16px;margin-bottom:16px}.policy-code{display:inline-grid;min-width:22px;height:22px;margin-right:6px;place-items:center;border-radius:50%;color:#fff;background:#239548;font-size:10px;font-weight:900}
+      .impact-grid{display:grid;grid-template-columns:1.2fr .9fr 1.1fr;gap:14px;margin-bottom:14px}.impact-card,.mini-impact,.final-note{padding:15px}.impact-card{display:grid;grid-template-columns:130px 1fr;align-items:center}.gauge{position:relative;width:122px;height:74px}.gauge svg{width:122px;height:74px}.gauge-value{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:23px;font-weight:900}.gauge-value small{font-size:12px}.impact-copy strong{display:block;color:#1d8b45}.impact-copy p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.4}
+      .mini-impact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.mini-impact{text-align:center}.mini-impact .symbol{font-size:27px}.mini-impact strong{display:block;margin-top:5px;font-size:20px}.mini-impact span{display:block;margin-top:4px;color:var(--muted);font-size:10px;line-height:1.3}.final-note h3{margin:0 0 8px;color:#0a3541;font-family:"Arial Narrow","Segoe UI",Arial,sans-serif;font-size:15px;text-transform:uppercase}.final-note p{margin:0;line-height:1.55}
+      .report-footer{display:flex;justify-content:space-between;gap:12px;padding-top:12px;border-top:1px solid var(--line);color:#607680;font-size:10px}.footer-brand{color:#237f43;font-weight:800}
+      @media(max-width:800px){.report{width:min(100% - 20px,700px);padding:18px}.report-header,.summary-grid,.analysis-grid,.impact-grid{grid-template-columns:1fr}.brand h1{font-size:29px}.brand-subtitle{font-size:17px}.header-stats{grid-template-columns:1fr 1fr}.kpi-grid{grid-template-columns:1fr 1fr}.insight-stack{grid-template-columns:1fr}.insight.recommend{grid-column:auto}.table-scroll{overflow-x:auto}.impact-grid{gap:10px}.report-actions{width:min(100% - 20px,700px);margin-top:10px}}
+      @media(max-width:480px){.report{margin:10px auto;padding:14px;border-radius:13px}.brand{align-items:flex-start}.brand-mark{width:54px;height:54px;border-radius:13px}.brand-mark svg{width:40px;height:40px}.brand h1{font-size:23px}.brand-subtitle{display:block;font-size:15px}.status{display:inline-block;margin-top:6px}.header-stats{grid-template-columns:1fr}.kpi{min-height:132px}.chart-card,.table-card,.policies{padding:12px}.chart-summary.six{grid-template-columns:repeat(3,1fr)}.chart-summary.six div:nth-child(3){border-right:0}.mini-impact-grid{grid-template-columns:1fr}.impact-card{grid-template-columns:1fr;text-align:center}.gauge{margin:auto}.report-footer{display:block}.report-footer span{display:block;margin-top:4px}}
+      @page{size:A4 portrait;margin:7mm}
+      @media print{html,body{background:#fff}.report-actions{display:none}.report{width:100%;max-width:none;margin:0;padding:0;border-radius:0;box-shadow:none}.report-header{margin-bottom:13px}.brand h1{font-size:29px}.brand-subtitle{font-size:17px}.brand-mark{width:58px;height:58px}.brand-mark svg{width:42px;height:42px}.header-stat{min-height:72px;padding:9px}.header-stat strong{font-size:17px}.summary-grid,.analysis-grid{gap:10px;margin-bottom:10px}.executive,.kpi-panel,.chart-card,.table-card,.policies{padding:11px}.kpi{min-height:116px;padding:9px 6px}.kpi strong{font-size:19px}.kpi-symbol{margin-top:7px;font-size:20px}.section-title{margin-bottom:8px;font-size:14px}.report-chart{max-height:215px}.chart-summary div{padding:4px 3px}table{font-size:8px}th,td{padding:4px 5px}.card,section{break-inside:avoid}.page-break-print{break-before:page;margin-top:0}.insight{padding:10px}.insight li{margin:4px 0}.policies{margin-bottom:10px}.impact-grid{gap:9px;margin-bottom:9px}.impact-card,.mini-impact,.final-note{padding:10px}.report-footer{padding-top:7px}}
+    </style>
+  </head>
+  <body>
+    <div class="report-actions">
+      <button class="back" type="button" onclick="location.href='index.html'">Volver al simulador</button>
+      <button type="button" onclick="window.print()">Guardar como PDF</button>
     </div>
-    <h2>Políticas implementadas</h2>
-    <table><thead><tr><th>Código</th><th>Política</th><th>Costo</th><th>Inicio</th><th>Culmina</th><th>Cambio visible</th></tr></thead><tbody>
-      ${(implemented.length ? implemented : [{ code: "-", name: "Sin políticas implementadas", cost: 0, startYear: "-", endYear: "-" }]).map(policy => `<tr><td>${policy.code}</td><td>${policy.name}</td><td>${policy.cost}</td><td>${policy.startYear}</td><td>${policy.endYear}</td><td>${policyVisualDescriptions[policy.code] || "NA"}</td></tr>`).join("")}
-    </tbody></table>
-    </body></html>
+    <main class="report">
+      <header class="report-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64"><path d="M50 9C29 10 14 20 12 39c8 0 15-2 21-7-5 7-10 13-15 22h7c4-9 10-17 18-24 6-6 8-13 7-21Z" fill="#087038"/><path d="M17 45c7-13 16-22 28-29" fill="none" stroke="#dff4df" stroke-width="3" stroke-linecap="round"/></svg>
+          </div>
+          <div><h1>Reporte final del simulador</h1><div class="brand-subtitle">Calidad de aire y entorno urbano <span class="status">${evaluation.status}</span></div></div>
+        </div>
+        <div class="header-stats">
+          <div class="header-stat"><div class="stat-head"><span class="stat-icon">▣</span><span>Presupuesto usado</span></div><strong>${fmt(getBudgetUsed(),0)} / ${BUDGET}</strong><div class="progress"><i></i></div></div>
+          <div class="header-stat"><div class="stat-head"><span class="stat-icon">✓</span><span>Políticas implementadas</span></div><strong>${implemented.length}</strong><small>de ${MAX_POLICIES} cupos simultáneos</small></div>
+        </div>
+      </header>
+
+      <section class="summary-grid">
+        <article class="card executive">
+          <h2 class="section-title"><span class="title-icon">▤</span>Resumen ejecutivo</h2>
+          <p>${summaryText}</p>
+          <div class="executive-point"><span class="point-icon">✓</span><div><strong>Fortaleza principal:</strong> ${feedback.strengths[0]}</div></div>
+          <div class="executive-point"><span class="point-icon${hasWeaknesses ? " warn" : ""}">${hasWeaknesses ? "!" : "✓"}</span><div><strong>${hasWeaknesses ? "Aspecto por reforzar" : "Aspecto a sostener"}:</strong> ${weaknesses[0]}</div></div>
+        </article>
+        <article class="card kpi-panel">
+          <h2 class="section-title">Indicadores clave (año 5)</h2>
+          <div class="kpi-grid">
+            <div class="kpi"><span>Reducción promedio de contaminantes</span><strong>${averageReduction >= 0 ? "-" : "+"}${fmt(Math.abs(averageReduction)*100,0)}%</strong><small>vs. año inicial</small><div class="kpi-symbol">↘</div></div>
+            <div class="kpi"><span>Exposición poblacional</span><strong>${fmt(final.exposure,0)}</strong><small>habitantes</small><div class="kpi-symbol">●●●</div></div>
+            <div class="kpi"><span>Aceptación social</span><strong>${fmt(final.acceptance,0)} / 100</strong><small>puntos</small><div class="kpi-symbol">☺</div></div>
+            <div class="kpi"><span>Temperatura</span><strong>${fmt(final.temp,1)} °C</strong><small>${changeText(initial.temp,final.temp)}</small><div class="kpi-symbol">♨</div></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="analysis-grid primary">
+        <article class="card chart-card">
+          <h2 class="section-title">Evolución de contaminantes <small>(índice: año 0 = 100)</small></h2>
+          ${createReportChart(["pm25","pm10","co2","nox","o3","cov"],values)}
+          <div class="chart-summary six">${chartSummary(["pm25","pm10","co2","nox","o3","cov"])}</div>
+        </article>
+        <article class="card table-card">
+          <h2 class="section-title">Valores iniciales y finales <small>(año 5)</small></h2>
+          <div class="table-scroll"><table><thead><tr><th>Variable</th><th class="numeric">Inicial</th><th class="numeric">Final año 5</th><th class="numeric">Cambio</th><th>Unidad</th></tr></thead><tbody>
+            ${rows.map(row => `<tr><td>${row.label}</td><td class="numeric">${fmt(row.start,row.digits)}</td><td class="numeric">${fmt(row.end,row.digits)}</td><td class="numeric ${changeTone(row)}"><strong>${changeText(row.start,row.end)}</strong></td><td>${row.unit}</td></tr>`).join("")}
+          </tbody></table></div>
+        </article>
+      </section>
+
+      <section class="analysis-grid page-break-print">
+        <article class="card chart-card">
+          <h2 class="section-title">Evolución social y térmica <small>(índice: año 0 = 100)</small></h2>
+          ${createReportChart(["temp","exposure","acceptance"],values)}
+          <div class="chart-summary three">${chartSummary(["temp","exposure","acceptance"])}</div>
+        </article>
+        <div class="insight-stack">
+          <article class="card insight good"><h3><span class="point-icon">✓</span>Fortalezas</h3><ul>${feedback.strengths.slice(0,3).map(item => `<li>${item}</li>`).join("")}</ul></article>
+          <article class="card insight ${hasWeaknesses ? "bad" : "good"}"><h3><span class="point-icon${hasWeaknesses ? " warn" : ""}">${hasWeaknesses ? "!" : "✓"}</span>${hasWeaknesses ? "Debilidades" : "Aspectos a sostener"}</h3><ul>${weaknesses.map(item => `<li>${item}</li>`).join("")}</ul></article>
+          <article class="card insight recommend"><h3><span class="title-icon">✦</span>Recomendaciones</h3><ul>${recommendations.map(item => `<li>${item}</li>`).join("")}</ul></article>
+        </div>
+      </section>
+
+      <section class="card policies">
+        <h2 class="section-title">Políticas implementadas</h2>
+        <div class="table-scroll"><table><thead><tr><th>Código</th><th>Política</th><th class="numeric">Costo</th><th class="numeric">Inicio</th><th class="numeric">Culmina</th><th>Cambio visible</th></tr></thead><tbody>
+          ${policyRows.map(policy => `<tr><td><span class="policy-code">${policy.code === "-" ? "—" : policy.code.replace("P","")}</span>${policy.code}</td><td>${policy.name}</td><td class="numeric">${policy.cost}</td><td class="numeric">${policy.startYear}</td><td class="numeric">${policy.endYear}</td><td>${policyVisualDescriptions[policy.code] || "Sin cambio visual asociado."}</td></tr>`).join("")}
+        </tbody></table></div>
+      </section>
+
+      <section class="impact-grid">
+        <article class="card impact-card">
+          <div class="gauge">
+            <svg viewBox="0 0 120 70" aria-label="Impacto global ${impactScore} de 100"><path d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke="#e4ecef" stroke-width="10" stroke-linecap="round" pathLength="100"/><path d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke="${statusColor}" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="${impactScore} 100"/></svg>
+            <div class="gauge-value">${impactScore}<small> / 100</small></div>
+          </div>
+          <div class="impact-copy"><strong>${impactLabel}</strong><p>Índice compuesto de metas ambientales, exposición, aceptación, equidad y ozono.</p></div>
+        </article>
+        <div class="mini-impact-grid">
+          <article class="card mini-impact"><div class="symbol">☁</div><strong>${averageReduction >= 0 ? "-" : "+"}${fmt(Math.abs(averageReduction)*100,0)}%</strong><span>Reducción promedio de contaminantes</span></article>
+          <article class="card mini-impact"><div class="symbol">♟</div><strong>${exposureReduction >= 0 ? "-" : "+"}${fmt(Math.abs(exposureReduction)*100,0)}%</strong><span>Exposición poblacional</span></article>
+          <article class="card mini-impact"><div class="symbol">♥</div><strong>${fmt(final.acceptance,0)} / 100</strong><span>Aceptación social</span></article>
+        </div>
+        <article class="card final-note"><h3>Nota final</h3><p>${finalNote}</p></article>
+      </section>
+
+      <footer class="report-footer"><span class="footer-brand">❧ Simulador Ambiental de Calidad de Aire</span><span>Fecha del reporte: ${reportDate}</span></footer>
+    </main>
+  </body>
+  </html>
   `;
 }
 
@@ -2737,7 +2996,11 @@ document.getElementById("btn-start").addEventListener("click", () => {
 });
 
 document.getElementById("btn-reset").addEventListener("click", resetSimulation);
-document.getElementById("btn-report").addEventListener("click", exportReport);
+document.getElementById("btn-report").addEventListener("click", event => {
+  event.preventDefault();
+  if (currentYear < TOTAL_YEARS || simulationRunning) return;
+  exportReport();
+});
 document.getElementById("btn-resolution").addEventListener("click", () => {
   window.open("https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf", "_blank", "noopener");
 });
@@ -2759,6 +3022,10 @@ window.render_game_to_text = () => JSON.stringify({
   budget: { total: BUDGET, used: getBudgetUsed(), available: BUDGET - getBudgetUsed() },
   selectedPolicies: [...plannedPolicies],
   activePolicies: getActiveInstances().map(instance => instance.code),
+  report: {
+    available: currentYear >= TOTAL_YEARS && !simulationRunning,
+    status: currentYear >= TOTAL_YEARS ? evaluatePlan(calculateValues(TOTAL_YEARS)).status : null
+  },
   metrics: (() => {
     const values = calculateValues(currentYear);
     return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, nox: values.nox, o3: values.o3, cov: values.cov, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
@@ -2767,7 +3034,7 @@ window.render_game_to_text = () => JSON.stringify({
 
 window.advanceTime = ms => {
   if (!simulationRunning) return window.render_game_to_text();
-  const years = Math.max(0, ms) / SIMULATION_DURATION;
+  const years = Math.max(0, ms) / YEAR_DURATION_MS;
   currentYear = Math.min(simulationTargetYear, currentYear + years);
   if (currentYear >= simulationTargetYear) {
     simulationRunning = false;
