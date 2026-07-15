@@ -1268,6 +1268,291 @@
     if (!window.__vt_pending) requestAnimationFrame(animateNox);
   }
 
+  function renderOzoneLab(root) {
+    const model = window.NoxModel;
+    if (!model) throw new Error("NoxModel no está disponible");
+
+    const params = new URLSearchParams(location.search);
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const embedded = params.get("embedded") === "1";
+    const currentParam = Number(params.get("current"));
+    const legacyParam = Number(params.get("value"));
+    const hasCurrent = params.has("current") && Number.isFinite(currentParam);
+    const hasLegacy = params.has("value") && Number.isFinite(legacyParam);
+    const currentPpb = clamp(hasCurrent ? currentParam : hasLegacy ? legacyParam : model.baseline.o3, 0, 100);
+    const initialExperiment = hasCurrent ? model.baseline.o3 : hasLegacy ? clamp(legacyParam, 10, 60) : model.baseline.o3;
+    const state = {
+      view: params.get("view") === "exposure" ? "exposure" : "formation",
+      concentration: initialExperiment,
+      zone: "downwind",
+      measure: "none",
+      covControl: false,
+      playing: !reducedMotion,
+      phase: 0
+    };
+    const eightHourLimit = model.ozoneEightHourUgM3;
+    const eightHourLimitPpb = model.o3UgM3ToPpb(eightHourLimit);
+    const peakSeasonPpb = model.o3UgM3ToPpb(model.ozonePeakSeasonUgM3);
+    let lastScene = { noxMolecules: 0, covMolecules: 0, ozoneMolecules: 0, windArrows: 0, receiver: state.zone, visibleEntities: [] };
+
+    const measureLabels = {
+      none: "Sin medida",
+      P1: "P1 · Zona de bajas emisiones",
+      P2: "P2 · Buses eléctricos",
+      P3: "P3 · Restricción vehicular",
+      P4: "P4 · Ciclorrutas y vías peatonales",
+      P6: "P6 · Corredores de ventilación",
+      P9: "P9 · Teletrabajo y horarios"
+    };
+    const zoneLabels = {
+      near: "Cerca de las fuentes: predominan emisiones precursoras y la reacción aún está evolucionando.",
+      background: "Fondo urbano: la mezcla integra aportes de varias fuentes y masas de aire.",
+      downwind: "A sotavento: el tiempo de reacción y el transporte pueden separar el O₃ de sus fuentes precursoras."
+    };
+
+    function experiment() {
+      const result = model.evaluateOzoneExperiment({ o3Ppb: state.concentration, measure: state.measure, covControl: state.covControl });
+      const withinLimit = result.ozoneAfterUgM3 <= eightHourLimit + 1e-7;
+      return {
+        ...result,
+        withinLimit,
+        status: withinLimit ? "Dentro del máximo colombiano y de la guía OMS de 8 horas" : "Supera el máximo colombiano y la guía OMS de 8 horas"
+      };
+    }
+
+    function precursorMarkup(result) {
+      const noxCount = Math.round(5 + ratio(result.values.nox, 55, model.baseline.nox) * 7);
+      const covCount = Math.round(4 + ratio(result.values.cov, 18, model.baseline.cov) * 6);
+      const nox = Array.from({ length: noxCount }, (_, index) => {
+        const progress = (state.phase * .88 + index / noxCount) % 1;
+        const x = 82 + progress * 284;
+        const y = 135 + (index % 4) * 28 + Math.sin((progress + index) * Math.PI * 2) * 6;
+        return `<g class="o3-precursor" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="8" fill="#2563a8" opacity=".9"/><text y="3" text-anchor="middle" font-size="6.5" font-weight="900" fill="#fff">NOx</text></g>`;
+      }).join("");
+      const cov = Array.from({ length: covCount }, (_, index) => {
+        const progress = (state.phase * .72 + index / covCount) % 1;
+        const x = 105 + progress * 270;
+        const y = 153 + (index % 4) * 27 + Math.cos((progress + index) * Math.PI * 2) * 5;
+        return `<g class="o3-precursor" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="8" fill="#7c4d9e" opacity=".88"/><text y="3" text-anchor="middle" font-size="6.5" font-weight="900" fill="#fff">COV</text></g>`;
+      }).join("");
+      return { markup: nox + cov, noxCount, covCount };
+    }
+
+    function ozoneMarkup(result, mode) {
+      const count = Math.round(7 + ratio(result.ozoneAfter, 10, 60) * 19);
+      const markup = Array.from({ length: count }, (_, index) => {
+        const progress = (state.phase * .64 + index / count) % 1;
+        const x = mode === "formation" ? 338 + progress * 336 : 48 + ((index * 79 + progress * 210) % 620);
+        const y = mode === "formation" ? 118 + (index % 6) * 30 + Math.sin((progress + index) * Math.PI * 2) * 6 : 78 + ((index * 43) % 210) + Math.sin((progress + index) * Math.PI * 2) * 5;
+        return `<g class="o3-molecule" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="9" fill="#d9822b" opacity=".88"/><text y="3.5" text-anchor="middle" font-size="7.5" font-weight="900" fill="#fff">O₃</text></g>`;
+      }).join("");
+      return { markup, count };
+    }
+
+    function receiverMarkup() {
+      const positions = { near: 190, background: 430, downwind: 620 };
+      const labels = { near: "CERCA DE FUENTES", background: "FONDO URBANO", downwind: "A SOTAVENTO" };
+      return Object.entries(positions).map(([zone, x]) => {
+        const active = zone === state.zone;
+        return `<g transform="translate(${x} 306)" opacity="${active ? 1 : .38}"><circle r="${active ? 15 : 10}" fill="${active ? "#d9822b" : "#71838c"}"/><path d="M0 15v28" stroke="#33434c" stroke-width="5"/><rect x="-20" y="43" width="40" height="24" rx="5" fill="#fff" stroke="#a8b8bf"/><text y="83" text-anchor="middle" font-size="8" font-weight="900" fill="#425660">${labels[zone]}</text></g>`;
+      }).join("");
+    }
+
+    function formationScene(result) {
+      const precursors = precursorMarkup(result);
+      const ozone = ozoneMarkup(result, "formation");
+      const windArrows = state.measure === "P6" ? 5 : 3;
+      const windShift = state.phase * 26;
+      const wind = Array.from({ length: windArrows }, (_, index) => `<path d="M${245 + index * 91 + windShift % 28} ${68 + index % 2 * 26}h58" stroke="#319b9b" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)" opacity="${state.measure === "P6" ? .88 : .5}"/>`).join("");
+      const sunPulse = 35 + Math.sin(state.phase * Math.PI * 2) * 3;
+      const svg = svgFrame("Formación secundaria y transporte de ozono desde fuentes precursoras hasta receptores urbanos", `
+        <defs><linearGradient id="ozone-sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dceef5"/><stop offset="1" stop-color="#fff1ce"/></linearGradient></defs>
+        <rect width="720" height="400" fill="url(#ozone-sky)"/>
+        <circle cx="642" cy="54" r="${sunPulse.toFixed(1)}" fill="#f0c75e"/><g stroke="#f0c75e" stroke-width="3" opacity=".65"><path d="M642 7V0"/><path d="M688 25l18-10"/><path d="M594 24l-16-10"/></g>
+        <path d="M82 224 C224 108 382 102 675 176" fill="none" stroke="#d9822b" stroke-width="34" opacity=".08" stroke-linecap="round"/>
+        ${wind}
+        <g transform="translate(28 238)"><rect width="122" height="66" rx="5" fill="#728a96"/><rect x="17" y="-42" width="25" height="49" rx="3" fill="#506773"/><path d="M61 0v-26l27 15 24-15V0" fill="#879ca5"/><text x="61" y="40" text-anchor="middle" font-size="10" font-weight="900" fill="#fff">FUENTES</text></g>
+        ${car(145, 276, palette.red, .62)}${car(205, 280, palette.blue, .55)}
+        <path d="M58 222 C190 112 298 122 376 175" fill="none" stroke="#7c4d9e" stroke-width="3" stroke-dasharray="8 9" opacity=".45"/>
+        <path d="M354 178 C445 112 556 118 682 168" fill="none" stroke="#d9822b" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" opacity=".75"/>
+        ${precursors.markup}${ozone.markup}
+        <g transform="translate(270 22)"><rect width="258" height="42" rx="14" fill="#fff" opacity=".94"/><text x="129" y="17" text-anchor="middle" font-size="10" font-weight="900" fill="#536773">NOx + COV + radiación solar</text><text x="129" y="31" text-anchor="middle" font-size="9" fill="#687a84">Formación secundaria · representación didáctica</text></g>
+        <rect y="304" width="720" height="96" fill="#e7e2d4"/>${receiverMarkup()}
+      `, "#f7f3e8");
+      return { svg, noxMolecules: precursors.noxCount, covMolecules: precursors.covCount, ozoneMolecules: ozone.count, windArrows, receiver: state.zone, visibleEntities: ["fuentes precursoras", "radiación solar", "parcela de aire", "tres receptores"] };
+    }
+
+    function exposureScene(result) {
+      const ozone = ozoneMarkup(result, "exposure");
+      const markerX = 75 + clamp(result.ozoneAfterUgM3 / model.o3PpbToUgM3(60), 0, 1) * 570;
+      const referenceX = 75 + clamp(eightHourLimit / model.o3PpbToUgM3(60), 0, 1) * 570;
+      const svg = svgFrame("Exposición urbana y de vegetación a una concentración equivalente de ozono de ocho horas", `
+        <rect width="720" height="278" fill="url(#sky)"/>${ozone.markup}
+        <g transform="translate(48 132)"><rect width="176" height="119" rx="17" fill="#fff" stroke="#c5d3d8"/><text x="88" y="24" text-anchor="middle" font-size="9" font-weight="900" fill="#637780">PROMEDIO DIDÁCTICO · 8 H</text><text x="88" y="61" text-anchor="middle" font-size="29" font-weight="900" fill="#d16f1d">${fmt(result.ozoneAfter, 1)}</text><text x="88" y="80" text-anchor="middle" font-size="10" font-weight="800" fill="#637780">ppb O₃</text><text x="88" y="102" text-anchor="middle" font-size="12" font-weight="900" fill="#7a5625">≈ ${fmt(result.ozoneAfterUgM3, 1)} µg/m³</text></g>
+        <g transform="translate(330 161)"><circle cx="0" cy="-30" r="17" fill="#d6a98f"/><path d="M0-13v62m0-34-28 25m28-25 27 22m-27 12-23 45m23-45 26 45" fill="none" stroke="#3c5968" stroke-width="9" stroke-linecap="round"/><text x="0" y="110" text-anchor="middle" font-size="9" font-weight="900" fill="#536773">PERSONAS</text></g>
+        ${tree(484, 201, .85)}${tree(581, 209, .72)}
+        <rect y="278" width="720" height="122" fill="#fff"/>
+        <text x="42" y="309" font-size="10" font-weight="900" fill="#536773">REFERENCIA DE 8 HORAS · µg/m³</text>
+        <line x1="75" y1="350" x2="645" y2="350" stroke="#d7dee2" stroke-width="13" stroke-linecap="round"/><line x1="75" y1="350" x2="${referenceX.toFixed(1)}" y2="350" stroke="#69b891" stroke-width="13" stroke-linecap="round"/><line x1="${referenceX.toFixed(1)}" y1="350" x2="645" y2="350" stroke="#d45850" stroke-width="13" stroke-linecap="round"/>
+        <path d="M${referenceX.toFixed(1)} 329v39" stroke="#7b3e36" stroke-width="2"/><text x="${(referenceX - 5).toFixed(1)}" y="324" text-anchor="end" font-size="9" font-weight="900" fill="#7b3e36">100 · Colombia y OMS</text>
+        <circle cx="${markerX.toFixed(1)}" cy="350" r="10" fill="#17202a" stroke="#fff" stroke-width="3"/><text x="${markerX.toFixed(1)}" y="384" text-anchor="middle" font-size="10" font-weight="900" fill="#17202a">${fmt(result.ozoneAfterUgM3, 1)}</text>
+      `, "#edf4f5");
+      return { svg, noxMolecules: 0, covMolecules: 0, ozoneMolecules: ozone.count, windArrows: 0, receiver: state.zone, visibleEntities: ["monitor de 8 horas", "personas", "vegetación", "barra Colombia y OMS"] };
+    }
+
+    document.title = "Laboratorio de ozono troposférico";
+    document.documentElement.style.setProperty("--accent", "#d16f1d");
+    document.documentElement.style.setProperty("--scene-tint", "#f7f3e8");
+    document.body.classList.toggle("embedded-resource", embedded);
+    root.className = "resource-shell o3-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back particulate-close" id="o3-close" type="button">${embedded ? "← Cerrar laboratorio" : "← Volver al simulador"}</button><span class="resource-tag">Laboratorio de química y transporte</span></nav>
+      <header class="resource-header o3-header"><div><p class="eyebrow">Contaminante secundario y exposición urbana</p><h1>Ozono troposférico: formación, transporte y exposición</h1><p class="lead">Observa cómo los precursores reaccionan bajo la luz solar, cómo el O₃ puede desplazarse a sotavento y cómo responden las concentraciones de 8 horas a las medidas del simulador.</p></div><div class="header-mark o3-mark" aria-hidden="true">O₃</div></header>
+      <section class="o3-layout" aria-label="Laboratorio de ozono troposférico">
+        <article class="card scene-card o3-scene-card">
+          <div class="card-head"><div><h2 id="o3-scene-title"></h2><p id="o3-scene-note"></p></div><span class="live-badge" id="o3-animation-badge"></span></div>
+          <div class="o3-view-tabs" role="tablist" aria-label="Vista del fenómeno"><button type="button" data-o3-view="formation" role="tab">Formación y transporte</button><button type="button" data-o3-view="exposure" role="tab">Exposición y referencias</button></div>
+          <div class="scene o3-scene" id="o3-scene"></div>
+          <div class="scene-legend" id="o3-legend"></div>
+          <div class="o3-context-grid"><article><span>O₃ actual del simulador</span><strong>${fmt(currentPpb, 1)} <small>ppb</small></strong><small>Estado transferido; el experimento inicia en su propia base.</small></article><article><span>Conversión aproximada</span><strong>≈ ${fmt(model.o3PpbToUgM3(currentPpb), 1)} <small>µg/m³</small></strong><small>A 25 °C y 1 atm; es una conversión de unidades, no otra respuesta química.</small></article></div>
+        </article>
+        <aside class="card control-card o3-controls">
+          <div><h2>Experimenta</h2><p class="control-intro">Las medidas son demostrativas y no modifican tu plan.</p></div>
+          <div class="control-group"><label class="control-label" for="o3-concentration"><span>Concentración experimental</span><span class="control-readout" id="o3-concentration-readout"></span></label><input id="o3-concentration" type="range" min="10" max="60" step="0.1"><div class="range-labels"><span>10 ppb</span><span>60 ppb</span></div></div>
+          <div class="control-group"><label class="control-label" for="o3-zone"><span>Zona observada</span></label><select id="o3-zone" class="select-control"><option value="near">Cerca de las fuentes</option><option value="background">Fondo urbano</option><option value="downwind">A sotavento</option></select><small class="o3-zone-note" id="o3-zone-note"></small></div>
+          <div class="control-group"><label class="control-label" for="o3-measure"><span>Medida sobre NOx</span></label><select id="o3-measure" class="select-control">${Object.entries(measureLabels).map(([code, label]) => `<option value="${code}">${label}</option>`).join("")}</select></div>
+          <label class="mitigation-toggle"><input id="o3-cov-control" type="checkbox"><span><strong>Aplicar P8 · Control de COV</strong><small>Reduce COV 35 % y permite explorar la respuesta combinada.</small></span></label>
+          <div class="playback-controls"><button type="button" id="o3-play"></button><button type="button" id="o3-reset">Restablecer</button></div>
+          <section class="o3-results" aria-live="polite">
+            <span class="measure-name" id="o3-measure-name"></span>
+            <div class="o3-result-pair"><article><span>Antes</span><strong id="o3-before"></strong><small id="o3-before-ug"></small></article><i aria-hidden="true">→</i><article><span>Después</span><strong id="o3-after"></strong><small id="o3-after-ug"></small></article></div>
+            <strong class="o3-change" id="o3-change"></strong>
+            <div class="o3-reference"><div class="reference-track"><i id="o3-limit-marker"><b>8 h · 100 µg/m³</b></i><span class="value-marker" id="o3-value-marker"></span></div><strong id="o3-status"></strong></div>
+            <p class="o3-result-note" id="o3-result-note"></p>
+          </section>
+        </aside>
+      </section>
+      <section class="particulate-info-grid" aria-label="Claves de interpretación del ozono"><article class="card info-card"><span class="info-icon" aria-hidden="true">NOx+COV</span><h2>No se emite directamente</h2><p>El O₃ troposférico se forma mediante reacciones entre precursores en presencia de radiación solar.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">→</span><h2>Puede viajar</h2><p>La mezcla y el tiempo de reacción pueden desplazar las concentraciones hacia comunidades a sotavento.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">8 h</span><h2>Período comparable</h2><p>El resultado se interpreta como un promedio didáctico equivalente de 8 horas, no como una lectura instantánea.</p></article></section>
+      <section class="card o3-standards-card"><div><p class="eyebrow">Referencias comparables</p><h2>O₃: calidad del aire y exposición</h2><p>Colombia y la OMS establecen 100 µg/m³ para 8 horas. La guía OMS de 60 µg/m³ para temporada pico se muestra solo como contexto.</p></div><div class="o3-standards-grid"><article><strong>Colombia</strong><span>100 µg/m³ · 8 horas</span><span>≈ ${fmt(eightHourLimitPpb, 1)} ppb a 25 °C y 1 atm</span></article><article><strong>OMS 2021</strong><span>100 µg/m³ · 8 horas</span><span>60 µg/m³ · temporada pico · ≈ ${fmt(peakSeasonPpb, 1)} ppb</span></article></div><p class="o3-stratosphere-note"><strong>Dos ubicaciones, dos funciones:</strong> aquí se estudia el ozono troposférico perjudicial. El ozono estratosférico ayuda a filtrar parte de la radiación ultravioleta.</p><div class="standards-links"><a href="https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf" target="_blank" rel="noopener">Resolución 2254 de 2017</a><a href="https://www.who.int/news-room/questions-and-answers/item/who-global-air-quality-guidelines" target="_blank" rel="noopener">Guías OMS 2021</a><a href="https://www.epa.gov/ground-level-ozone-pollution/ground-level-ozone-basics" target="_blank" rel="noopener">Ozono troposférico · EPA</a></div></section>`;
+
+    const elements = {
+      scene: document.getElementById("o3-scene"), badge: document.getElementById("o3-animation-badge"), concentration: document.getElementById("o3-concentration"), zone: document.getElementById("o3-zone"), measure: document.getElementById("o3-measure"), covControl: document.getElementById("o3-cov-control"), play: document.getElementById("o3-play")
+    };
+
+    function renderScene() {
+      const result = experiment();
+      lastScene = state.view === "formation" ? formationScene(result) : exposureScene(result);
+      elements.scene.innerHTML = lastScene.svg;
+    }
+
+    function render() {
+      const result = experiment();
+      document.querySelectorAll("[data-o3-view]").forEach(button => {
+        const active = button.dataset.o3View === state.view;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.getElementById("o3-scene-title").textContent = state.view === "formation" ? "De los precursores al receptor" : "Concentración y referencia de 8 horas";
+      document.getElementById("o3-scene-note").textContent = state.view === "formation" ? "La radiación es una condición necesaria; la química y la ventilación usan las reglas compartidas del simulador." : "La escena representa exposición ambiental y no una dosis fisiológica exacta.";
+      elements.badge.textContent = state.playing ? "En movimiento" : "En pausa";
+      elements.badge.classList.toggle("paused", !state.playing);
+      elements.play.textContent = state.playing ? "Pausar animación" : "Reproducir animación";
+      elements.concentration.value = state.concentration;
+      elements.zone.value = state.zone;
+      elements.measure.value = state.measure;
+      elements.covControl.checked = state.covControl;
+      document.getElementById("o3-concentration-readout").textContent = `${fmt(state.concentration, 1)} ppb`;
+      document.getElementById("o3-zone-note").textContent = zoneLabels[state.zone];
+      document.getElementById("o3-measure-name").textContent = `${measureLabels[state.measure]}${state.covControl ? " + P8" : ""}`;
+      document.getElementById("o3-before").textContent = `${fmt(result.ozoneBefore, 1)} ppb`;
+      document.getElementById("o3-after").textContent = `${fmt(result.ozoneAfter, 1)} ppb`;
+      document.getElementById("o3-before-ug").textContent = `≈ ${fmt(result.ozoneBeforeUgM3, 1)} µg/m³`;
+      document.getElementById("o3-after-ug").textContent = `≈ ${fmt(result.ozoneAfterUgM3, 1)} µg/m³`;
+      const sign = result.ozoneChangePercent > 0 ? "+" : "";
+      document.getElementById("o3-change").textContent = result.ozoneChangePercent ? `Cambio frente al escenario base: ${sign}${fmt(result.ozoneChangePercent, 0)} %` : "Sin cambio frente al escenario base";
+      document.getElementById("o3-change").className = `o3-change ${result.ozoneChangePercent > 0 ? "increase" : result.ozoneChangePercent < 0 ? "decrease" : "stable"}`;
+      document.getElementById("o3-status").textContent = `${result.status} · ${fmt(result.ozoneAfterUgM3, 1)} µg/m³`;
+      document.getElementById("o3-status").className = result.withinLimit ? "within" : "exceeds";
+      const referenceMax = model.o3PpbToUgM3(60);
+      document.getElementById("o3-limit-marker").style.left = `${clamp(eightHourLimit / referenceMax * 100, 0, 100)}%`;
+      document.getElementById("o3-value-marker").style.left = `${clamp(result.ozoneAfterUgM3 / referenceMax * 100, 0, 100)}%`;
+      document.getElementById("o3-result-note").textContent = result.ozoneChangePercent > 0 ? "La reducción aislada de NOx activa el régimen simplificado que puede aumentar O₃." : result.ozoneChangePercent < 0 ? "El control suficiente de COV o la ventilación disminuye O₃ en el modelo." : "La combinación seleccionada no activa un cambio de O₃ en las reglas actuales.";
+      document.getElementById("o3-legend").innerHTML = state.view === "formation" ? `<span class="legend-item"><i class="legend-dot" style="--dot:#2563a8"></i>NOx</span><span class="legend-item"><i class="legend-dot" style="--dot:#7c4d9e"></i>COV</span><span class="legend-item"><i class="legend-dot" style="--dot:#d9822b"></i>O₃</span><span class="legend-item"><i class="legend-dot" style="--dot:#319b9b"></i>Transporte</span>` : `<span class="legend-item"><i class="legend-dot" style="--dot:#d9822b"></i>O₃ ambiental</span><span class="legend-item"><i class="legend-dot" style="--dot:#69b891"></i>Dentro de 100 µg/m³</span><span class="legend-item"><i class="legend-dot" style="--dot:#d45850"></i>Supera 100 µg/m³</span>`;
+      renderScene();
+    }
+
+    const viewButtons = [...document.querySelectorAll("[data-o3-view]")];
+    viewButtons.forEach((button, index) => {
+      button.addEventListener("click", () => { state.view = button.dataset.o3View; render(); });
+      button.addEventListener("keydown", event => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const next = viewButtons[(index + direction + viewButtons.length) % viewButtons.length];
+        state.view = next.dataset.o3View;
+        render();
+        next.focus();
+      });
+    });
+    elements.concentration.addEventListener("input", () => { state.concentration = Number(elements.concentration.value); render(); });
+    elements.zone.addEventListener("change", () => { state.zone = elements.zone.value; render(); });
+    elements.measure.addEventListener("change", () => { state.measure = elements.measure.value; render(); });
+    elements.covControl.addEventListener("change", () => { state.covControl = elements.covControl.checked; render(); });
+    elements.play.addEventListener("click", () => { state.playing = !state.playing; render(); });
+    document.getElementById("o3-reset").addEventListener("click", () => { Object.assign(state, { view: "formation", concentration: model.baseline.o3, zone: "downwind", measure: "none", covControl: false, playing: !reducedMotion, phase: 0 }); render(); });
+    document.getElementById("o3-close").addEventListener("click", () => {
+      if (embedded && window.parent !== window) window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      else if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) history.back();
+      else location.href = "index.html";
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && embedded && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      }
+    });
+
+    function renderResourceToText() {
+      const result = experiment();
+      return JSON.stringify({
+        resource: "o3",
+        view: state.view,
+        coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
+        current: { ozonePpb: Number(currentPpb.toFixed(2)), ozoneUgM3: Number(model.o3PpbToUgM3(currentPpb).toFixed(2)) },
+        experiment: { beforeOzonePpb: Number(result.ozoneBefore.toFixed(3)), afterOzonePpb: Number(result.ozoneAfter.toFixed(3)), beforeOzoneUgM3: Number(result.ozoneBeforeUgM3.toFixed(3)), afterOzoneUgM3: Number(result.ozoneAfterUgM3.toFixed(3)), changePercent: Number(result.ozoneChangePercent.toFixed(1)), status: result.status },
+        zone: state.zone,
+        measures: { nox: state.measure, cov: state.covControl ? "P8" : "none" },
+        chemistry: { noxBeforePpb: Number(result.reference.nox.toFixed(2)), noxAfterPpb: Number(result.values.nox.toFixed(2)), covBeforeUgM3: Number(result.reference.cov.toFixed(2)), covAfterUgM3: Number(result.values.cov.toFixed(2)), windBeforeMs: Number(result.reference.wind.toFixed(2)), windAfterMs: Number(result.values.wind.toFixed(2)), factors: Object.fromEntries(Object.entries(result.ozoneFactors).map(([key, value]) => [key, Number((value * 100).toFixed(1))])) },
+        references: { colombiaEightHourUgM3: eightHourLimit, whoEightHourUgM3: eightHourLimit, contextualOnly: { whoPeakSeasonUgM3: model.ozonePeakSeasonUgM3 } },
+        animation: { playing: state.playing, phase: Number(state.phase.toFixed(3)) },
+        visible: { noxMolecules: lastScene.noxMolecules, covMolecules: lastScene.covMolecules, ozoneMolecules: lastScene.ozoneMolecules, windArrows: lastScene.windArrows, receiver: lastScene.receiver, entities: lastScene.visibleEntities }
+      });
+    }
+
+    window.RESOURCE = { kind: "ozone-formation-transport-exposure" };
+    window.render_resource_to_text = renderResourceToText;
+    window.render_game_to_text = renderResourceToText;
+    window.advanceTime = ms => {
+      if (state.playing) state.phase = (state.phase + Math.max(0, Number(ms) || 0) / 6000) % 1;
+      renderScene();
+      return renderResourceToText();
+    };
+
+    let lastFrame = performance.now();
+    function animateOzone(now) {
+      const delta = Math.min(50, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      if (state.playing) {
+        state.phase = (state.phase + delta / 6000) % 1;
+        renderScene();
+      }
+      requestAnimationFrame(animateOzone);
+    }
+    render();
+    if (!window.__vt_pending) requestAnimationFrame(animateOzone);
+  }
+
   const key = document.body.dataset.resource;
   const root = document.getElementById("resource-app");
   if (!root) return;
@@ -1284,6 +1569,11 @@
 
   if (key === "nox") {
     renderNoxLab(root);
+    return;
+  }
+
+  if (key === "o3") {
+    renderOzoneLab(root);
     return;
   }
 

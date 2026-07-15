@@ -156,3 +156,13 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Decisión de modelo: conservar O₃ en ppb, mostrar secundariamente µg/m³ a 25 °C y 1 atm y reutilizar exactamente los efectos compartidos de P1, P2, P3, P4, P6, P8 y P9.
 - Referencias verificadas: Colombia y OMS usan 100 µg/m³ en 8 horas; la OMS añade 60 µg/m³ para temporada pico, que se mostrará solo como contexto y no clasificará una observación individual.
 - El plan completo, sus controles, resultados esperados e interfaz de aceptación quedaron registrados en `CRITERIOS_LABS_EDUCATIVOS.md`.
+- Implementación iniciada: `modelo-nox.js` incorpora conversión O₃ ppb–µg/m³ y evaluación experimental pura con los mismos efectos y la misma respuesta química del simulador.
+- Implementación inicial: O₃ dispone de vistas de formación/transporte y exposición/referencias, concentración 10–60 ppb, zona receptora, medidas P1–P9/P8, resultados antes/después y animación determinista.
+- Integración inicial: la tarjeta O₃ abre el diálogo educativo mediante `current`, la ruta directa conserva `value`, se añadió favicon y el cierre interno usa el mismo protocolo de los demás laboratorios.
+- Verificación funcional final: sin parámetros, `current`, `value` y su precedencia conservan 20,2 ppb; los puntos 10/20,2/30,6/50,9/51/60 entregan conversiones y estados de 8 horas coherentes.
+- Verificación de políticas: P1/P2=+8 %, P3/P4/P9=0 %, P6=−9 %, P8 y P1+P8=−12 %, y P6+P8=−21 %, todos calculados por `NoxModel.evaluateOzoneExperiment`.
+- Verificación determinista: 600 ms avanzan 0,1 de fase al reproducir, la pausa conserva el fotograma y restablecer recupera 20,2 ppb, zona a sotavento, sin medidas, vista inicial y fase cero; movimiento reducido inicia en pausa.
+- Verificación integrada: con P1 y 35 puntos usados, cierre interno, Escape, botón externo y mensaje conservan política, presupuesto, año e historial y restauran el foco a la tarjeta O₃.
+- Verificación visual y accesible: formación/transporte y exposición/referencias revisadas en 1280×900 y 390×844; pestañas operables con flechas, sin moléculas fuera del `viewBox`, desbordamiento, errores de consola ni solicitudes 404.
+- Regresión final: el cliente determinista oficial confirmó PM2.5, CO₂, NOx, O₃ y el recurso genérico COV; la auditoría conserva 370 combinaciones evaluadas y 39 planes aceptables.
+- Pendientes conocidos: ninguno dentro del alcance del laboratorio de O₃.

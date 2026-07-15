@@ -773,7 +773,7 @@
 </script>
 
 <script src="road-layout.js"></script>
-<script src="modelo-nox.js?v=1"></script>
+<script src="modelo-nox.js?v=2"></script>
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -922,10 +922,11 @@ function particulateResourceUrl(focus, values, embedded = false) {
 
 function educationalResourceUrl(resource, values, embedded = false) {
   if (resource === "pm25" || resource === "pm10") return particulateResourceUrl(resource, values, embedded);
-  const current = resource === "nox" ? values.nox : values.co2;
+  const current = resource === "nox" ? values.nox : resource === "o3" ? values.o3 : values.co2;
   const params = new URLSearchParams({ current: Number(current).toFixed(1) });
   if (embedded) params.set("embedded", "1");
-  return `recurso-${resource}.html?${params.toString()}`;
+  const filename = resource === "o3" ? "recurso-ozono.html" : `recurso-${resource}.html`;
+  return `${filename}?${params.toString()}`;
 }
 
 function openEducationalResource(resource, trigger) {
@@ -934,13 +935,16 @@ function openEducationalResource(resource, trigger) {
   educationalResourceFocus = resource;
   const particulate = resource === "pm25" || resource === "pm10";
   const nox = resource === "nox";
-  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : nox ? "Laboratorio de NOx y ozono" : "Laboratorio de emisiones de CO₂";
+  const ozone = resource === "o3";
+  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : nox ? "Laboratorio de NOx y ozono" : ozone ? "Laboratorio de ozono troposférico" : "Laboratorio de emisiones de CO₂";
   educationalResourceDescription.textContent = particulate
     ? "Compara PM2.5 y PM10 sin modificar tu plan ambiental."
     : nox
       ? "Explora fuentes, exposición y química del ozono sin modificar tu plan."
-      : "Distingue emisiones urbanas y concentración atmosférica sin modificar tu plan.";
-  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : nox ? "Laboratorio de NOx, NO₂ y formación de ozono" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
+      : ozone
+        ? "Explora formación secundaria, transporte y exposición de 8 horas sin modificar tu plan."
+        : "Distingue emisiones urbanas y concentración atmosférica sin modificar tu plan.";
+  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : nox ? "Laboratorio de NOx, NO₂ y formación de ozono" : ozone ? "Laboratorio de formación, transporte y exposición a ozono" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
   educationalResourceFrame.src = educationalResourceUrl(resource, values, true);
   if (!educationalResourceDialog.open) educationalResourceDialog.showModal();
   educationalResourceClose.focus();
@@ -1297,7 +1301,7 @@ function updateDashboard(rawValues) {
       card.dataset.param = def.key;
       card.title = `Abrir recurso didáctico de ${def.label}`;
       card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
-      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox") {
+      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3") {
         card.addEventListener("click", event => {
           event.preventDefault();
           openEducationalResource(def.key, card);
@@ -1306,7 +1310,7 @@ function updateDashboard(rawValues) {
       grid.appendChild(card);
     }
     card.querySelector("span").textContent = def.label;
-    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox"
+    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3"
       ? educationalResourceUrl(def.key, rawValues)
       : `${def.resource}?value=${encodeURIComponent(value)}`;
     card.querySelector("strong").textContent = fmt(displayValue, def.digits);
@@ -3110,6 +3114,7 @@ window.render_game_to_text = () => JSON.stringify({
   selectedPolicies: [...plannedPolicies],
   activePolicies: getActiveInstances().map(instance => instance.code),
   educationalResource: { open: educationalResourceDialog.open, focus: educationalResourceFocus },
+  history: { points: state.history.length, years: state.history.map(point => Number(point.year.toFixed(2))) },
   report: {
     available: currentYear >= TOTAL_YEARS && !simulationRunning,
     status: currentYear >= TOTAL_YEARS ? evaluatePlan(calculateValues(TOTAL_YEARS)).status : null

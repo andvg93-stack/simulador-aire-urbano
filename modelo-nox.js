@@ -21,6 +21,7 @@
   });
 
   const NO2_MOLAR_MASS = 46.0055;
+  const O3_MOLAR_MASS = 47.9982;
   const MOLAR_VOLUME_25C = 24.45;
 
   function clamp(value, min, max) {
@@ -41,6 +42,14 @@
 
   function no2UgM3ToNoxPpb(value) {
     return Number(value) * MOLAR_VOLUME_25C / NO2_MOLAR_MASS;
+  }
+
+  function o3PpbToUgM3(value) {
+    return Number(value) * O3_MOLAR_MASS / MOLAR_VOLUME_25C;
+  }
+
+  function o3UgM3ToPpb(value) {
+    return Number(value) * MOLAR_VOLUME_25C / O3_MOLAR_MASS;
   }
 
   function ozoneResponse(values, reference = BASELINE) {
@@ -96,14 +105,50 @@
     };
   }
 
+  function evaluateOzoneExperiment({ o3Ppb = BASELINE.o3, measure = "none", covControl = false } = {}) {
+    const reference = { ...BASELINE, o3: clamp(Number(o3Ppb), 10, 60) };
+    const primary = policyEffects(measure);
+    const p8 = covControl ? policyEffects("P8") : policyEffects("none");
+    const effects = {
+      nox: primary.nox + p8.nox,
+      cov: primary.cov + p8.cov,
+      temp: primary.temp + p8.temp,
+      wind: primary.wind + p8.wind
+    };
+    const values = {
+      nox: reference.nox * (1 + effects.nox),
+      cov: reference.cov * (1 + effects.cov),
+      temp: reference.temp + effects.temp,
+      wind: reference.wind * (1 + effects.wind)
+    };
+    const ozone = ozoneResponse(values, reference);
+    return {
+      reference,
+      values,
+      effects,
+      ozoneBefore: reference.o3,
+      ozoneAfter: ozone.value,
+      ozoneChangePercent: ozone.changePercent,
+      ozoneFactors: ozone.factors,
+      reductions: ozone.reductions,
+      ozoneBeforeUgM3: o3PpbToUgM3(reference.o3),
+      ozoneAfterUgM3: o3PpbToUgM3(ozone.value)
+    };
+  }
+
   global.NoxModel = Object.freeze({
     baseline: BASELINE,
     policyEffects,
     mergePolicyEffects,
     noxPpbToNo2UgM3,
     no2UgM3ToNoxPpb,
+    o3PpbToUgM3,
+    o3UgM3ToPpb,
     ozoneResponse,
     evaluateExperiment,
-    colombiaOneHourUgM3: 200
+    evaluateOzoneExperiment,
+    colombiaOneHourUgM3: 200,
+    ozoneEightHourUgM3: 100,
+    ozonePeakSeasonUgM3: 60
   });
 })(window);
