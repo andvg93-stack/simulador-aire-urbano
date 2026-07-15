@@ -117,3 +117,8 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Accesibilidad y estabilidad: movimiento reducido inicia en pausa, todos los controles son alcanzables por teclado, las moléculas permanecen dentro del `viewBox` y no hay errores de consola ni solicitudes 404.
 - Cliente determinista oficial ejecutado después de los ajustes finales; estado textual y captura coinciden.
 - Pendientes conocidos: ninguno dentro del alcance del laboratorio de CO₂.
+- Ajuste de presentación solicitado: el índice permanece como variable interna, pero todos los valores visibles usan una escala didáctica acotada de 431 ppm en índice 70 a 496 ppm en índice 100; valores internos fuera del intervalo se muestran en el límite más cercano.
+- Ajuste aplicado: tarjeta, estado textual, laboratorio, gráfica normalizada, tabla y resumen del reporte convierten CO₂ con la misma función, manteniendo intactos los efectos de las políticas.
+- Verificación de la escala: 70=431 ppm, 100=496 ppm, P1=474,3, P2=463,5, P3/P9=485,2, P4=480,8 y P5=489,5 ppm; índices menores de 70 permanecen en 431 y mayores de 100 en 496.
+- Verificación de coherencia: el escenario P1+P2 termina en 442 ppm tanto en tarjeta como en reporte; la tabla y el resumen gráfico muestran una variación de −10,9% calculada sobre los valores visibles.
+- Verificación visual final: P2 muestra 496→464 ppm en escritorio y móvil, sin desbordamiento ni errores de consola.

@@ -719,6 +719,13 @@
     P5: { code: "P5", label: "P5 · Arborización urbana", effect: -.03 },
     P9: { code: "P9", label: "P9 · Teletrabajo y horarios", effect: -.05 }
   };
+  const co2DisplayScale = { minIndex: 70, maxIndex: 100, minPpm: 431, maxPpm: 496 };
+
+  function co2IndexToPpm(index) {
+    const bounded = clamp(Number(index), co2DisplayScale.minIndex, co2DisplayScale.maxIndex);
+    const progress = (bounded - co2DisplayScale.minIndex) / (co2DisplayScale.maxIndex - co2DisplayScale.minIndex);
+    return co2DisplayScale.minPpm + progress * (co2DisplayScale.maxPpm - co2DisplayScale.minPpm);
+  }
 
   function renderCo2Lab(root) {
     const params = new URLSearchParams(location.search);
@@ -731,6 +738,7 @@
     const hasCurrent = params.has("current") && Number.isFinite(currentParam);
     const hasLegacy = params.has("value") && Number.isFinite(legacyParam);
     const currentIndex = clamp(hasCurrent ? currentParam : hasLegacy ? legacyParam / 496 * 100 : 100, 0, 200);
+    const currentPpm = co2IndexToPpm(currentIndex);
     const state = {
       view: initialView,
       activity: 100,
@@ -751,11 +759,13 @@
       const measure = co2Measures[state.measure];
       const before = state.activity;
       const after = before * (1 + measure.effect);
+      const beforePpm = co2IndexToPpm(before);
+      const afterPpm = co2IndexToPpm(after);
       const reduction = Math.max(0, -measure.effect * 100);
-      let status = "Sin cambio respecto al escenario base";
-      if (after < 99.95) status = `${fmt(100 - after, 1)}% por debajo del escenario base`;
-      if (after > 100.05) status = `${fmt(after - 100, 1)}% por encima del escenario base`;
-      return { measure, before, after, reduction, status };
+      let status = "Valor interpolado dentro de la escala 431–496 ppm";
+      if (afterPpm <= co2DisplayScale.minPpm + .05) status = "Límite inferior de la escala didáctica · 431 ppm";
+      if (afterPpm >= co2DisplayScale.maxPpm - .05) status = "Límite superior de la escala didáctica · 496 ppm";
+      return { measure, before, after, beforePpm, afterPpm, reduction, status };
     }
 
     function moleculeMarkup(count, mode) {
@@ -781,7 +791,7 @@
     }
 
     function urbanScene(result) {
-      const count = Math.round(8 + ratio(state.activity, 50, 150) * 18);
+      const count = Math.round(8 + ratio(state.activity, 70, 100) * 18);
       const mobilityActive = state.source === "mobility" || state.source === "mixed";
       const energyActive = state.source === "energy" || state.source === "mixed";
       const emitters = [mobilityActive ? "movilidad" : null, energyActive ? "edificios y energía" : null].filter(Boolean);
@@ -802,13 +812,13 @@
         <line x1="0" y1="361" x2="720" y2="361" stroke="#f6df76" stroke-width="4" stroke-dasharray="28 22"/>
         <g opacity="${mobilityActive ? 1 : .28}">${carsMarkup}</g>
         ${moleculeMarkup(count, "sources")}
-        <g transform="translate(478 24)"><rect width="214" height="58" rx="14" fill="#fff" opacity=".94"/><text x="16" y="22" font-size="11" font-weight="800" fill="#60737d">ÍNDICE EXPERIMENTAL</text><text x="16" y="47" font-size="25" font-weight="900" fill="#17202a">${fmt(result.after, 1)}</text><text x="118" y="47" font-size="10" font-weight="800" fill="#60737d">base = 100</text></g>
+        <g transform="translate(478 24)"><rect width="214" height="58" rx="14" fill="#fff" opacity=".94"/><text x="16" y="22" font-size="11" font-weight="800" fill="#60737d">CO₂ EQUIVALENTE</text><text x="16" y="47" font-size="25" font-weight="900" fill="#17202a">${fmt(result.afterPpm, 0)}</text><text x="83" y="47" font-size="10" font-weight="800" fill="#60737d">ppm · escala didáctica</text></g>
       `, "#edf3f7");
       return { svg, molecules: count, emitters, energyArrows: 0 };
     }
 
     function climateScene() {
-      const count = Math.round(13 + ratio(state.activity, 50, 150) * 9);
+      const count = Math.round(13 + ratio(state.activity, 70, 100) * 9);
       const pulse = 4 + Math.sin(state.phase * Math.PI * 2) * 3;
       const svg = svgFrame("Representación didáctica del dióxido de carbono atmosférico y el flujo de energía del efecto invernadero", `
         <defs><linearGradient id="climate-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#274f67"/><stop offset="1" stop-color="#b9dce7"/></linearGradient></defs>
@@ -847,13 +857,13 @@
           <div class="scene co2-scene" id="co2-scene"></div>
           <div class="scene-legend" id="co2-legend"></div>
           <div class="co2-context-grid">
-            <article><span>Índice actual del simulador</span><strong id="co2-current-index">${fmt(currentIndex, 1)}</strong><small>Base original = 100</small></article>
+            <article><span>CO₂ actual del simulador</span><strong id="co2-current-index">${fmt(currentPpm, 0)} <small>ppm</small></strong><small>Equivalencia didáctica del índice interno ${fmt(currentIndex, 1)}.</small></article>
             <article><span>Atmósfera · junio de 2026</span><strong>431 <small>ppm</small></strong><small>Referencia global; no es un límite normativo.</small></article>
           </div>
         </article>
         <aside class="card control-card co2-controls">
-          <div><h2>Experimenta</h2><p class="control-intro">El experimento parte siempre de índice 100 y no modifica tu plan.</p></div>
-          <div class="control-group"><label class="control-label" for="co2-activity"><span>Actividad relativa</span><span class="control-readout" id="co2-activity-readout">100 %</span></label><input id="co2-activity" type="range" min="50" max="150" step="1" value="100"><div class="range-labels"><span>50 %</span><span>150 %</span></div></div>
+          <div><h2>Experimenta</h2><p class="control-intro">El experimento recorre la escala 70–100 y no modifica tu plan.</p></div>
+          <div class="control-group"><label class="control-label" for="co2-activity"><span>Actividad relativa</span><span class="control-readout" id="co2-activity-readout">100 %</span></label><input id="co2-activity" type="range" min="70" max="100" step="1" value="100"><div class="range-labels"><span>70 %</span><span>100 %</span></div></div>
           <div class="control-group"><label class="control-label" for="co2-source"><span>Fuente destacada</span></label><select id="co2-source" class="select-control"><option value="mobility">Movilidad</option><option value="energy">Edificios y energía</option><option value="mixed" selected>Fuente mixta</option></select><small class="co2-source-note" id="co2-source-note"></small></div>
           <div class="control-group"><label class="control-label" for="co2-measure"><span>Aplicar medida</span></label><select id="co2-measure" class="select-control">${Object.values(co2Measures).map(item => `<option value="${item.code}">${item.label}${item.effect ? ` · ${fmt(item.effect * 100, 0)}%` : ""}</option>`).join("")}</select></div>
           <div class="playback-controls"><button type="button" id="co2-play"></button><button type="button" id="co2-reset">Restablecer</button></div>
@@ -861,7 +871,7 @@
             <div class="co2-result-pair"><article><span>Antes</span><strong id="co2-before"></strong></article><i aria-hidden="true">→</i><article><span>Después</span><strong id="co2-after"></strong></article></div>
             <p id="co2-reduction"></p><strong class="co2-status" id="co2-status"></strong>
           </div>
-          <p class="didactic-note">El índice compara emisiones relativas. Las ppm describen cuántas moléculas de CO₂ hay por millón de moléculas de aire seco y no cambian instantáneamente con este control.</p>
+          <p class="didactic-note">Las ppm mostradas son una equivalencia visual: índice 70 = 431 ppm e índice 100 = 496 ppm. Se interpolan entre esos límites; no representan una medición ni un cálculo atmosférico.</p>
         </aside>
       </section>
       <section class="particulate-info-grid" aria-label="Claves de interpretación del dióxido de carbono">
@@ -870,7 +880,7 @@
         <article class="card info-card"><span class="info-icon" aria-hidden="true">☀</span><h2>Efecto climático</h2><p>Una mayor concentración de gases de efecto invernadero ralentiza la pérdida de energía hacia el espacio.</p></article>
       </section>
       <section class="card co2-reference-card">
-        <div><p class="eyebrow">Contexto atmosférico independiente</p><h2>Tendencia global de CO₂</h2><p>Serie ilustrativa con valores redondeados a partir de observaciones globales. La referencia de 431 ppm corresponde a junio de 2026 y no es un máximo colombiano de calidad del aire.</p></div>
+        <div><p class="eyebrow">Contexto atmosférico independiente</p><h2>Tendencia global de CO₂</h2><p>Serie ilustrativa con valores redondeados a partir de observaciones globales. La referencia de 431 ppm corresponde a junio de 2026, sirve como límite inferior de la escala didáctica y no es un máximo colombiano de calidad del aire.</p></div>
         <svg class="co2-history" viewBox="0 0 520 150" role="img" aria-label="Tendencia creciente del dióxido de carbono atmosférico desde 1980 hasta 2026"><line x1="35" y1="122" x2="500" y2="122" stroke="#b6c4ca"/><line x1="35" y1="20" x2="35" y2="122" stroke="#b6c4ca"/><path d="M35 112 L134 97 L235 78 L336 58 L437 34 L500 20" fill="none" stroke="#506773" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M35 112 L134 97 L235 78 L336 58 L437 34 L500 20 L500 122 L35 122z" fill="#a9c5d1" opacity=".28"/><g fill="#506773">${[[35,112],[134,97],[235,78],[336,58],[437,34],[500,20]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="5"/>`).join("")}</g><text x="35" y="143" font-size="11" fill="#5f6f7a">1980 · ~339 ppm</text><text x="500" y="143" text-anchor="end" font-size="11" fill="#5f6f7a">jun. 2026 · 431 ppm</text></svg>
         <div class="standards-links"><a href="https://gml.noaa.gov/ccgg/trends/gl_full.html" target="_blank" rel="noopener">Serie global NOAA</a><a href="https://science.nasa.gov/earth/explore/earth-indicators/carbon-dioxide/" target="_blank" rel="noopener">Indicador de CO₂ de NASA</a><a href="https://science.nasa.gov/climate-change/causes/" target="_blank" rel="noopener">Efecto invernadero · NASA</a><a href="https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf" target="_blank" rel="noopener">Resolución 2254 de 2017</a></div>
       </section>`;
@@ -907,9 +917,9 @@
       elements.play.textContent = state.playing ? "Pausar animación" : "Reproducir animación";
       elements.badge.textContent = state.playing ? "En movimiento" : "En pausa";
       elements.badge.classList.toggle("paused", !state.playing);
-      document.getElementById("co2-before").textContent = fmt(result.before, 1);
-      document.getElementById("co2-after").textContent = fmt(result.after, 1);
-      document.getElementById("co2-reduction").textContent = result.reduction ? `${result.measure.code}: reducción del ${fmt(result.reduction, 0)}% en el modelo principal.` : "Sin medida: el índice depende únicamente de la actividad relativa.";
+      document.getElementById("co2-before").textContent = `${fmt(result.beforePpm, 0)} ppm`;
+      document.getElementById("co2-after").textContent = `${fmt(result.afterPpm, 0)} ppm`;
+      document.getElementById("co2-reduction").textContent = result.reduction ? `${result.measure.code}: efecto relativo de −${fmt(result.reduction, 0)}% aplicado antes de convertir a ppm.` : "Sin medida: el valor recorre directamente la escala didáctica.";
       document.getElementById("co2-status").textContent = result.status;
       document.getElementById("co2-legend").innerHTML = state.view === "sources"
         ? `<span class="legend-item"><i class="legend-dot" style="--dot:#506773"></i>Flujo relativo de CO₂</span><span class="legend-item"><i class="legend-dot" style="--dot:#be3a34"></i>Movilidad</span><span class="legend-item"><i class="legend-dot" style="--dot:#8097a1"></i>Edificios y energía</span>`
@@ -943,6 +953,7 @@
         view: state.view,
         coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
         indices: { current: Number(currentIndex.toFixed(2)), before: Number(result.before.toFixed(2)), after: Number(result.after.toFixed(2)), base: 100 },
+        displayPpm: { current: Number(currentPpm.toFixed(1)), before: Number(result.beforePpm.toFixed(1)), after: Number(result.afterPpm.toFixed(1)), anchors: { index70: 431, index100: 496 } },
         atmosphericReference: { value: 431, unit: "ppm", date: "junio de 2026", regulatoryLimit: false },
         activity: state.activity,
         source: state.source,

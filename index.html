@@ -783,6 +783,13 @@ const MAX_POLICIES = 5;
 const BUDGET = 100;
 const TOTAL_YEARS = 5;
 const YEAR_DURATION_MS = 4500;
+const CO2_DISPLAY_SCALE = { minIndex: 70, maxIndex: 100, minPpm: 431, maxPpm: 496 };
+
+function co2IndexToPpm(index) {
+  const bounded = clamp(Number(index), CO2_DISPLAY_SCALE.minIndex, CO2_DISPLAY_SCALE.maxIndex);
+  const progress = (bounded - CO2_DISPLAY_SCALE.minIndex) / (CO2_DISPLAY_SCALE.maxIndex - CO2_DISPLAY_SCALE.minIndex);
+  return CO2_DISPLAY_SCALE.minPpm + progress * (CO2_DISPLAY_SCALE.maxPpm - CO2_DISPLAY_SCALE.minPpm);
+}
 
 const baseline = {
   pm25: 67.0,
@@ -818,7 +825,7 @@ const policies = [
 const paramDefinitions = [
   { key: "pm25", label: "PM2.5", unit: "µg/m³", averaging: "24 h", min: 5, max: 80, digits: 1, inverse: true, resource: "recurso-pm25.html" },
   { key: "pm10", label: "PM10", unit: "µg/m³", averaging: "24 h", min: 10, max: 120, digits: 1, inverse: true, resource: "recurso-pm10.html" },
-  { key: "co2", label: "Emisiones CO₂", unit: "índice", min: 65, max: 115, digits: 1, inverse: true, resource: "recurso-co2.html" },
+  { key: "co2", label: "CO₂ equivalente", unit: "ppm", min: 65, max: 115, digits: 0, inverse: true, display: co2IndexToPpm, resource: "recurso-co2.html" },
   { key: "nox", label: "NOx", unit: "ppb", min: 10, max: 120, digits: 0, inverse: true, resource: "recurso-nox.html" },
   { key: "o3", label: "O₃", unit: "ppb", min: 10, max: 60, digits: 1, inverse: true, resource: "recurso-ozono.html" },
   { key: "cov", label: "COV", unit: "µg/m³", min: 5, max: 50, digits: 1, inverse: true, resource: "recurso-cov.html" },
@@ -1285,7 +1292,8 @@ function updateDashboard(rawValues) {
 
   const grid = document.getElementById("param-grid");
   paramDefinitions.forEach(def => {
-    const value = values[def.key];
+    const value = def.key === "co2" ? rawValues[def.key] : values[def.key];
+    const displayValue = def.display ? def.display(value) : value;
     const ratio = clamp((value - def.min) / (def.max - def.min), 0, 1);
     const width = `${Math.round(ratio * 100)}%`;
     let card = grid.querySelector(`[data-param="${def.key}"]`);
@@ -1307,7 +1315,7 @@ function updateDashboard(rawValues) {
     card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2"
       ? educationalResourceUrl(def.key, rawValues)
       : `${def.resource}?value=${encodeURIComponent(value)}`;
-    card.querySelector("strong").textContent = fmt(value, def.digits);
+    card.querySelector("strong").textContent = fmt(displayValue, def.digits);
     card.querySelector("em").textContent = def.unit;
     const bar = card.querySelector(".bar i");
     bar.style.width = width;
@@ -2762,7 +2770,7 @@ function debugApplyPoliciesForYear(codes, year = 1) {
 
 function createReportChart(seriesKeys, values) {
   const colors = { pm25: "#ed2f2f", pm10: "#ef8b00", co2: "#69777f", nox: "#175bc9", o3: "#08a89c", cov: "#8d49b6", temp: "#ed2f2f", exposure: "#2d983f", acceptance: "#175bc9" };
-  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "Emisiones CO₂", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temperatura", exposure: "Exposición", acceptance: "Aceptación" };
+  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "CO₂ equivalente", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temperatura", exposure: "Exposición", acceptance: "Aceptación" };
   const w = 720;
   const h = 300;
   const plot = { left: 52, right: 16, top: 18, bottom: 68 };
@@ -2783,10 +2791,11 @@ function createReportChart(seriesKeys, values) {
   svg += `<line x1="${plot.left}" y1="${plot.top}" x2="${plot.left}" y2="${plot.top + plotHeight}" stroke="#aebfc8"/><line x1="${plot.left}" y1="${plot.top + plotHeight}" x2="${w - plot.right}" y2="${plot.top + plotHeight}" stroke="#aebfc8"/>`;
 
   seriesKeys.forEach((key, index) => {
-    const base = values[0][key] || 1;
+    const chartValue = item => key === "co2" ? co2IndexToPpm(item[key]) : item[key];
+    const base = chartValue(values[0]) || 1;
     const coordinates = values.map(item => {
       const x = plot.left + (item.year / TOTAL_YEARS) * plotWidth;
-      const y = yFor(item[key] / base * 100);
+      const y = yFor(chartValue(item) / base * 100);
       return { x, y };
     });
     const points = coordinates.map(point => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
@@ -2814,7 +2823,8 @@ function buildReportHtml() {
   const evaluation = evaluatePlan(final);
   const implemented = getImplementedPolicies();
   const feedback = buildPlanFeedback(evaluation, final, implemented);
-  const averageReduction = ["pm25", "pm10", "co2", "nox", "cov"].reduce((total, key) => total + reduction(key, final), 0) / 5;
+  const co2DisplayReduction = 1 - (co2IndexToPpm(final.co2) / co2IndexToPpm(baseline.co2));
+  const averageReduction = (["pm25", "pm10", "nox", "cov"].reduce((total, key) => total + reduction(key, final), 0) + co2DisplayReduction) / 5;
   const exposureReduction = reduction("exposure", final);
   const ozoneIncrease = (final.o3 - baseline.o3) / baseline.o3;
   const impactParts = [
@@ -2853,7 +2863,7 @@ function buildReportHtml() {
   const rows = [
     { key: "pm25", label: "PM2.5", start: initial.pm25, end: final.pm25, unit: "µg/m³", digits: 1 },
     { key: "pm10", label: "PM10", start: initial.pm10, end: final.pm10, unit: "µg/m³", digits: 1 },
-    { key: "co2", label: "Emisiones CO₂", start: initial.co2, end: final.co2, unit: "índice", digits: 1 },
+    { key: "co2", label: "CO₂ equivalente", start: co2IndexToPpm(initial.co2), end: co2IndexToPpm(final.co2), unit: "ppm", digits: 0 },
     { key: "nox", label: "NOx", start: initial.nox, end: final.nox, unit: "ppb", digits: 0 },
     { key: "o3", label: "O₃", start: initial.o3, end: final.o3, unit: "ppb", digits: 1 },
     { key: "cov", label: "COV", start: initial.cov, end: final.cov, unit: "µg/m³", digits: 1 },
@@ -3112,7 +3122,7 @@ window.render_game_to_text = () => JSON.stringify({
   },
   metrics: (() => {
     const values = calculateValues(currentYear);
-    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, nox: values.nox, o3: values.o3, cov: values.cov, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
+    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, co2Index: values.co2, co2Ppm: Number(co2IndexToPpm(values.co2).toFixed(1)), nox: values.nox, o3: values.o3, cov: values.cov, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
   })()
 });
 
