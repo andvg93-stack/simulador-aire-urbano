@@ -1,6 +1,6 @@
 # Auditoria de balance de politicas
 
-Generado: 2026-06-11T22:05:23.156Z
+Generado: 2026-07-15T20:48:45.549Z
 
 ## Resumen
 

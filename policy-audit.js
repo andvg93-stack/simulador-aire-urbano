@@ -2,6 +2,7 @@ const fs = require("fs");
 const vm = require("vm");
 
 const INDEX_PATH = "index.html";
+const NOX_MODEL_PATH = "modelo-nox.js";
 const JSON_OUT = "policy-audit-report.json";
 const MD_OUT = "policy-audit-summary.md";
 const CSV_OUT = "policy-audit-combinations.csv";
@@ -16,6 +17,8 @@ function extractConst(source, name) {
 function readIndexModel() {
   const source = fs.readFileSync(INDEX_PATH, "utf8");
   const context = {};
+  context.window = context;
+  vm.runInNewContext(fs.readFileSync(NOX_MODEL_PATH, "utf8"), context);
   const baseline = vm.runInNewContext(`(${extractConst(source, "baseline")})`, context);
   const policies = vm.runInNewContext(`(${extractConst(source, "policies")})`, context);
   const budget = Number(extractConst(source, "BUDGET"));

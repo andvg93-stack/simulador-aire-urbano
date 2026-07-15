@@ -707,3 +707,111 @@ input[type="range"] {
   .co2-reference-card .standards-links { grid-column: 1; }
   .co2-history { min-height: auto; }
 }
+
+/* Laboratorio de NOx, NO2 y ozono */
+.nox-header { align-items: center; }
+.nox-mark { color: #fff; background: #2563a8; border-color: #2563a8; font-size: 31px; }
+
+.nox-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(355px, .8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.nox-scene-card { overflow: hidden; }
+.nox-view-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: #f1f5f7;
+}
+
+.nox-view-tabs button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  color: #526b78;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.nox-view-tabs button.active { color: #fff; background: #2563a8; box-shadow: 0 5px 14px rgba(37, 99, 168, .25); }
+.nox-scene, .nox-scene svg { min-height: 400px; }
+.nox-molecule text { pointer-events: none; }
+
+.nox-context-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  border-top: 1px solid var(--line);
+  background: var(--line);
+}
+
+.nox-context-grid article { display: grid; gap: 5px; padding: 16px 18px; background: #fff; }
+.nox-context-grid span { color: #526b78; font-size: 10px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.nox-context-grid strong { color: #17202a; font-size: 25px; }
+.nox-context-grid strong small { color: #60737d; font-size: 11px; }
+.nox-context-grid article > small { color: #687a84; font-size: 11px; line-height: 1.4; }
+
+.nox-controls { gap: 15px; }
+.nox-source-note { color: #687a84; font-size: 11px; line-height: 1.45; }
+.nox-results { display: grid; gap: 11px; }
+.nox-result-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+.nox-result-pair article { display: grid; align-content: center; gap: 3px; min-width: 0; padding: 11px; border: 1px solid #d5e0e5; border-radius: 12px; background: #f7fafb; }
+.nox-result-pair article > span { color: #667b86; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.nox-result-pair article > strong { color: #17202a; font-size: 21px; white-space: nowrap; }
+.nox-result-pair article > small { color: #2563a8; font-size: 9px; font-weight: 800; line-height: 1.35; }
+.nox-result-pair > i { align-self: center; color: #2563a8; font-size: 21px; font-style: normal; }
+.nox-reduction { color: #294d63; font-size: 12px; }
+
+.nox-reference { padding: 13px 12px 11px; border: 1px solid #d5e0e5; border-radius: 12px; background: #fff; }
+.nox-reference .reference-track { margin-top: 31px; background: linear-gradient(90deg, #69b891 0 88.5%, #d45850 88.5% 100%); }
+.nox-reference .reference-track i b { transform: translateX(-100%); }
+.nox-reference > strong { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; }
+.nox-reference > strong.within { color: #176b48; }
+.nox-reference > strong.exceeds { color: #a93631; }
+
+.nox-ozone-result { display: grid; gap: 4px; padding: 12px; border-radius: 12px; background: #f5f2e9; }
+.nox-ozone-result > span { color: #78663e; font-size: 9px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.nox-ozone-result > strong { font-size: 17px; }
+.nox-ozone-result > strong.increase { color: #ac332f; }
+.nox-ozone-result > strong.decrease { color: #16714a; }
+.nox-ozone-result > strong.stable { color: #536773; }
+.nox-ozone-result > small { color: #6d6b61; font-size: 10px; line-height: 1.4; }
+
+.nox-standards-card {
+  display: grid;
+  grid-template-columns: minmax(240px, .8fr) minmax(380px, 1.2fr);
+  gap: 20px 28px;
+  align-items: start;
+  margin-top: 18px;
+  padding: 21px;
+}
+
+.nox-standards-card h2 { margin: 0; }
+.nox-standards-card p:not(.eyebrow) { margin: 8px 0 0; color: #5f6f7a; font-size: 12px; line-height: 1.55; }
+.nox-standards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.nox-standards-grid article { display: grid; gap: 6px; padding: 14px; border: 1px solid #d5e0e5; border-radius: 12px; background: #f7fafb; }
+.nox-standards-grid strong { color: #254b61; font-size: 13px; }
+.nox-standards-grid span { color: #60737d; font-size: 11px; }
+.nox-standards-card .standards-links { grid-column: 1 / -1; }
+
+@media (max-width: 980px) {
+  .nox-layout { grid-template-columns: 1fr; }
+  .nox-controls { min-height: auto; }
+}
+
+@media (max-width: 680px) {
+  .nox-mark { display: none; }
+  .nox-scene, .nox-scene svg { min-height: 260px; }
+  .nox-context-grid { grid-template-columns: 1fr; }
+  .nox-result-pair article { padding: 9px; }
+  .nox-result-pair article > strong { font-size: 18px; }
+  .nox-standards-card { grid-template-columns: 1fr; padding: 17px; }
+  .nox-standards-grid { grid-template-columns: 1fr; }
+  .nox-standards-card .standards-links { grid-column: 1; }
+}

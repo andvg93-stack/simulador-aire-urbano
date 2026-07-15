@@ -107,26 +107,6 @@
     };
   }
 
-  function noxScene(level) {
-    const cars = Math.round(2 + level * 6);
-    const carMarkup = Array.from({ length: cars }, (_, index) => {
-      const x = 25 + index * 96;
-      return `${car(x, 318, index % 2 ? "#4f7183" : palette.red, 0.85)}<path d="M${x + 54} 324c34-28 54-31 80-25" fill="none" stroke="${palette.blue}" stroke-width="${5 + level * 10}" stroke-linecap="round" opacity="${0.18 + level * 0.4}"/>`;
-    }).join("");
-    return {
-      svg: svgFrame("Vehículos emitiendo óxidos de nitrógeno y participando en la formación de ozono", `
-        <rect width="720" height="304" fill="url(#sky)"/>
-        ${buildings(304)}
-        <g transform="translate(482 34)"><circle cx="42" cy="42" r="33" fill="${palette.yellow}"/><path d="M93 42h55" stroke="${palette.orange}" stroke-width="4" marker-end="url(#arrow)"/><rect x="155" y="16" width="104" height="54" rx="14" fill="#fff"/><text x="207" y="49" text-anchor="middle" font-size="18" font-weight="900" fill="${palette.red}">O₃</text></g>
-        <rect y="302" width="720" height="98" fill="${palette.road}"/>
-        <line x1="0" y1="358" x2="720" y2="358" stroke="#f6df76" stroke-width="4" stroke-dasharray="28 22"/>
-        ${carMarkup}
-        <g transform="translate(24 25)"><rect width="140" height="42" rx="21" fill="#fff"/><circle cx="23" cy="21" r="8" fill="${palette.blue}" opacity=".5"/><text x="42" y="26" font-size="13" font-weight="800" fill="${palette.ink}">Pluma de NOx</text></g>
-      `, "#f3f5f7"),
-      legend: [{ label: "Emisión de NOx", color: palette.blue }, { label: "Precursor de O₃", color: palette.yellow }]
-    };
-  }
-
   function ozoneScene(level, nox, cov) {
     const intensity = clamp((level * 0.45) + (nox * 0.28) + (cov * 0.27), 0, 1);
     const cloudOpacity = 0.12 + intensity * 0.48;
@@ -312,15 +292,6 @@
       primary: { id: "concentration", label: "Concentración de PM10", min: 10, max: 120, step: .1, value: 50, unit: "µg/m³", low: "10", high: "120", digits: 1 },
       compute: s => { const r = ratio(s.concentration, 10, 120); return { value: s.concentration, digits: 1, unit: "µg/m³", category: categoryFor(r), tone: toneFor(r), explanation: r < .38 ? "Hay pocas partículas gruesas visibles en la trayectoria urbana." : r < .68 ? "El polvo resuspendido gana importancia y conviene controlar vías y obras." : "La concentración alta hace prioritario actuar sobre fuentes de polvo y material suelto.", scene: pmScene(r, "pm10") }; },
       info: info.pm10, challenge: "Compara la escala de PM10 y PM2.5 y localiza dónde cambia su penetración respiratoria."
-    },
-    nox: {
-      title: "NOx", eyebrow: "Óxidos de nitrógeno", mark: "NOx", accent: "#2563a8", tint: "#eaf3fa",
-      lead: "Se originan principalmente en motores y otras combustiones; además participan en la química que forma ozono troposférico.",
-      primary: { id: "combustion", label: "Vehículos de combustión", min: 0, max: 100, step: 1, value: 70, unit: "%", low: "Pocos", high: "Muchos" },
-      fromQuery: value => clamp((value - 15) / 1.1, 0, 100),
-      compute: s => { const r = s.combustion / 100; const value = 15 + s.combustion * 1.1; return { value, digits: 0, unit: "ppb", category: categoryFor(r, ["Emisión baja", "Emisión media", "Emisión alta"]), tone: toneFor(r), explanation: "Más vehículos de combustión producen una pluma más intensa y aportan precursores para la formación de O₃.", scene: noxScene(r) }; },
-      info: [{ icon: "🚌", title: "Fuente", text: "Motores diésel y gasolina, calderas y combustión industrial." }, { icon: "🫁", title: "Efectos", text: "Irrita el sistema respiratorio y empeora algunas condiciones pulmonares." }, { icon: "☀️", title: "Química", text: "Con COV y radiación participa en la formación de ozono troposférico." }],
-      challenge: "Reduce los vehículos y observa qué partes de la escena cambian y cuáles permanecen."
     },
     o3: {
       title: "Ozono troposférico", eyebrow: "Contaminante secundario", mark: "O₃", accent: "#b77800", tint: "#fff7df",
@@ -988,6 +959,315 @@
     if (!window.__vt_pending) requestAnimationFrame(animateCo2);
   }
 
+  function renderNoxLab(root) {
+    const model = window.NoxModel;
+    if (!model) throw new Error("NoxModel no está disponible");
+
+    const params = new URLSearchParams(location.search);
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const embedded = params.get("embedded") === "1";
+    const currentParam = Number(params.get("current"));
+    const legacyParam = Number(params.get("value"));
+    const hasCurrent = params.has("current") && Number.isFinite(currentParam);
+    const hasLegacy = params.has("value") && Number.isFinite(legacyParam);
+    const currentPpb = clamp(hasCurrent ? currentParam : hasLegacy ? legacyParam : model.baseline.nox, 0, 200);
+    const initialExperiment = hasCurrent ? model.baseline.nox : hasLegacy ? clamp(legacyParam, 10, 120) : model.baseline.nox;
+    const requestedView = params.get("view");
+    const initialView = requestedView === "chemistry" ? "chemistry" : "sources";
+    const colombiaLimit = model.colombiaOneHourUgM3;
+    const colombiaLimitPpb = model.no2UgM3ToNoxPpb(colombiaLimit);
+    const state = {
+      view: initialView,
+      concentration: initialExperiment,
+      source: "mixed",
+      measure: "none",
+      covControl: false,
+      playing: !reducedMotion,
+      phase: 0
+    };
+    let lastScene = { noxMolecules: 0, covMolecules: 0, ozoneMolecules: 0, emitters: [], windArrows: 0 };
+
+    const measureLabels = {
+      none: "Sin medida",
+      P1: "P1 · Zona de bajas emisiones",
+      P2: "P2 · Buses eléctricos",
+      P3: "P3 · Restricción vehicular",
+      P4: "P4 · Ciclorrutas y vías peatonales",
+      P6: "P6 · Corredores de ventilación",
+      P9: "P9 · Teletrabajo y horarios"
+    };
+    const sourceLabels = {
+      light: "Tráfico liviano: automóviles y viajes urbanos de combustión.",
+      heavy: "Buses y carga: motores de mayor tamaño y operación intensiva.",
+      stationary: "Combustión estacionaria: calderas, industria y generación térmica.",
+      mixed: "Mezcla urbana: tráfico liviano, buses, carga y fuentes estacionarias."
+    };
+
+    function experiment() {
+      const result = model.evaluateExperiment({
+        noxPpb: state.concentration,
+        measure: state.measure,
+        covControl: state.covControl
+      });
+      const withinLimit = result.no2EquivalentAfter <= colombiaLimit + 1e-7;
+      return {
+        ...result,
+        withinLimit,
+        status: withinLimit ? "Dentro del máximo colombiano de 1 hora" : "Supera el máximo colombiano de 1 hora"
+      };
+    }
+
+    function sourceFlags() {
+      return {
+        light: state.source === "light" || state.source === "mixed",
+        heavy: state.source === "heavy" || state.source === "mixed",
+        stationary: state.source === "stationary" || state.source === "mixed"
+      };
+    }
+
+    function noxMoleculeMarkup(count, mode) {
+      return Array.from({ length: count }, (_, index) => {
+        const progress = (state.phase + index / count) % 1;
+        let x;
+        let y;
+        if (mode === "chemistry") {
+          x = 72 + ((index * 47 + progress * 190) % 284);
+          y = 112 + ((index * 39) % 148) + Math.sin((progress + index) * Math.PI * 2) * 6;
+        } else {
+          const starts = [[78, 318], [240, 318], [432, 246]];
+          const start = starts[index % starts.length];
+          const eased = 1 - ((1 - progress) ** 2);
+          x = start[0] + (584 - start[0]) * eased;
+          y = start[1] + (116 - start[1]) * eased + Math.sin((progress + index) * Math.PI * 2) * 7;
+        }
+        return `<g class="nox-molecule" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="8" fill="#2563a8" opacity=".9"/><text y="3.2" text-anchor="middle" font-size="6.5" font-weight="900" fill="#fff">NOx</text></g>`;
+      }).join("");
+    }
+
+    function covMoleculeMarkup(count) {
+      return Array.from({ length: count }, (_, index) => {
+        const progress = (state.phase * .82 + index / count) % 1;
+        const x = 254 + ((index * 53 + progress * 175) % 286);
+        const y = 126 + ((index * 31) % 142) + Math.cos((progress + index) * Math.PI * 2) * 6;
+        return `<g class="cov-molecule" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="8" fill="#7c4d9e" opacity=".88"/><text y="3.2" text-anchor="middle" font-size="6.5" font-weight="900" fill="#fff">COV</text></g>`;
+      }).join("");
+    }
+
+    function ozoneMoleculeMarkup(count) {
+      return Array.from({ length: count }, (_, index) => {
+        const progress = (state.phase * .66 + index / count) % 1;
+        const x = 476 + ((index * 37 + progress * 92) % 168);
+        const y = 112 + ((index * 43) % 168) + Math.sin((progress + index) * Math.PI * 2) * 5;
+        return `<g class="ozone-molecule" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="10" fill="#d9822b" opacity=".9"/><text y="4" text-anchor="middle" font-size="8" font-weight="900" fill="#fff">O₃</text></g>`;
+      }).join("");
+    }
+
+    function sourcesScene(result) {
+      const flags = sourceFlags();
+      const noxCount = Math.round(7 + ratio(result.values.nox, 10, 120) * 21);
+      const emitters = [flags.light ? "tráfico liviano" : null, flags.heavy ? "buses y carga" : null, flags.stationary ? "combustión estacionaria" : null].filter(Boolean);
+      const carMarkup = [40, 112].map((x, index) => car(x, 324, index ? palette.blue : palette.red, .7)).join("");
+      const busMarkup = `<g transform="translate(204 304)" opacity="${flags.heavy ? 1 : .22}"><rect width="118" height="43" rx="8" fill="#315f79"/><rect x="12" y="9" width="72" height="15" rx="3" fill="#c8e2eb"/><circle cx="24" cy="43" r="10" fill="#26343b"/><circle cx="94" cy="43" r="10" fill="#26343b"/><text x="93" y="22" text-anchor="middle" font-size="9" font-weight="900" fill="#fff">BUS</text></g>`;
+      const windArrows = state.measure === "P6" ? 4 : 0;
+      const windMarkup = Array.from({ length: windArrows }, (_, index) => `<path d="M${44 + index * 118} ${75 + index % 2 * 28}h82" stroke="#319b9b" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)" opacity=".72"/>`).join("");
+      const svg = svgFrame("Fuentes urbanas de NOx, mezcla atmosférica y punto de monitoreo de NO₂ equivalente", `
+        <rect width="720" height="304" fill="url(#sky)"/>
+        <rect width="720" height="118" fill="#cbe3ec" opacity=".48"/>
+        ${buildings(304)}
+        ${windMarkup}
+        <g opacity="${flags.stationary ? 1 : .22}"><rect x="388" y="220" width="130" height="84" rx="5" fill="#6e8490"/><rect x="420" y="164" width="25" height="76" rx="3" fill="#526b77"/><path d="M469 220v-32l28 17 23-17v32" fill="#8297a0"/><text x="454" y="275" text-anchor="middle" font-size="10" font-weight="900" fill="#fff">COMBUSTIÓN</text></g>
+        <rect y="304" width="720" height="96" fill="${palette.road}"/>
+        <line x1="0" y1="360" x2="720" y2="360" stroke="#f6df76" stroke-width="4" stroke-dasharray="28 22"/>
+        <g opacity="${flags.light ? 1 : .22}">${carMarkup}</g>${busMarkup}
+        ${noxMoleculeMarkup(noxCount, "sources")}
+        <g transform="translate(558 45)"><rect width="142" height="112" rx="16" fill="#fff" stroke="#b9ced8"/><text x="71" y="23" text-anchor="middle" font-size="10" font-weight="900" fill="#5d7180">PUNTO DE MONITOREO</text><text x="71" y="58" text-anchor="middle" font-size="27" font-weight="900" fill="#17202a">${fmt(result.values.nox, 1)}</text><text x="71" y="76" text-anchor="middle" font-size="10" font-weight="800" fill="#5d7180">ppb NOx</text><text x="71" y="98" text-anchor="middle" font-size="11" font-weight="900" fill="#2563a8">≈ ${fmt(result.no2EquivalentAfter, 1)} µg/m³ NO₂</text></g>
+        <g transform="translate(22 20)"><rect width="238" height="42" rx="14" fill="#fff" opacity=".94"/><circle cx="23" cy="21" r="7" fill="#2563a8"/><text x="39" y="18" font-size="10" font-weight="900" fill="#243740">NOx: familia precursora</text><text x="39" y="31" font-size="9" fill="#60737d">NO₂ equivalente: contexto de exposición</text></g>
+      `, "#edf4f8");
+      return { svg, noxMolecules: noxCount, covMolecules: 0, ozoneMolecules: 0, emitters, windArrows };
+    }
+
+    function chemistryScene(result) {
+      const noxCount = Math.round(7 + ratio(result.values.nox, 10, 120) * 10);
+      const covCount = Math.round(5 + ratio(result.values.cov, 10, model.baseline.cov) * 7);
+      const ozoneCount = Math.round(6 + ratio(result.ozoneAfter, 15, 23) * 9);
+      const windArrows = state.measure === "P6" ? 5 : 2;
+      const windMarkup = Array.from({ length: windArrows }, (_, index) => `<path d="M${50 + index * 118} ${325 + index % 2 * 23}h78" stroke="#319b9b" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)" opacity="${state.measure === "P6" ? .85 : .4}"/>`).join("");
+      const pulse = 5 + Math.sin(state.phase * Math.PI * 2) * 3;
+      const svg = svgFrame("Química didáctica entre NOx, COV, radiación, ventilación y ozono troposférico", `
+        <defs><linearGradient id="chem-sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dceff6"/><stop offset="1" stop-color="#fff3cf"/></linearGradient></defs>
+        <rect width="720" height="400" fill="url(#chem-sky)"/>
+        <circle cx="626" cy="62" r="38" fill="#f4c64f"/><g stroke="#f4c64f" stroke-width="3" opacity=".7"><path d="M626 9v-9"/><path d="M676 24l18-13"/><path d="M680 75l25 5"/><path d="M575 25l-17-14"/></g>
+        <path d="M357 80v230" stroke="#a9bcc5" stroke-width="2" stroke-dasharray="7 8"/>
+        <text x="54" y="55" font-size="12" font-weight="900" fill="#2563a8">PRECURSORES</text><text x="474" y="55" font-size="12" font-weight="900" fill="#a35b10">OZONO RESULTANTE</text>
+        ${noxMoleculeMarkup(noxCount, "chemistry")}${covMoleculeMarkup(covCount)}
+        <path d="M330 202 C390 ${180 - pulse} 410 ${180 + pulse} 458 202" fill="none" stroke="#d9822b" stroke-width="6" stroke-linecap="round" marker-end="url(#arrow)"/>
+        ${ozoneMoleculeMarkup(ozoneCount)}${windMarkup}
+        <g transform="translate(28 278)"><rect width="294" height="39" rx="12" fill="#fff" opacity=".92"/><text x="147" y="16" text-anchor="middle" font-size="10" font-weight="900" fill="#425d69">NOx ${fmt(result.values.nox, 1)} ppb · COV ${fmt(result.values.cov, 1)} µg/m³</text><text x="147" y="30" text-anchor="middle" font-size="9" fill="#60737d">Balance químico simplificado del simulador</text></g>
+        <g transform="translate(448 275)"><rect width="244" height="52" rx="13" fill="#fff" opacity=".94"/><text x="122" y="20" text-anchor="middle" font-size="10" font-weight="900" fill="#6b4a1c">O₃ ${fmt(result.ozoneBefore, 1)} → ${fmt(result.ozoneAfter, 1)} ppb</text><text x="122" y="38" text-anchor="middle" font-size="11" font-weight="900" fill="${result.ozoneChangePercent > 0 ? "#b6342f" : result.ozoneChangePercent < 0 ? "#16714a" : "#536773"}">${result.ozoneChangePercent > 0 ? "+" : ""}${fmt(result.ozoneChangePercent, 0)}%</text></g>
+      `, "#edf4f8");
+      return { svg, noxMolecules: noxCount, covMolecules: covCount, ozoneMolecules: ozoneCount, emitters: ["NOx", "COV", "radiación solar"], windArrows };
+    }
+
+    document.title = "Laboratorio de NOx, NO₂ y ozono";
+    document.documentElement.style.setProperty("--accent", "#2563a8");
+    document.documentElement.style.setProperty("--scene-tint", "#edf4f8");
+    document.body.classList.toggle("embedded-resource", embedded);
+    root.className = "resource-shell nox-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back particulate-close" id="nox-close" type="button">${embedded ? "← Cerrar laboratorio" : "← Volver al simulador"}</button><span class="resource-tag">Laboratorio de química urbana</span></nav>
+      <header class="resource-header nox-header"><div><p class="eyebrow">Combustión, exposición y química atmosférica</p><h1>NOx, NO₂ y formación de ozono</h1><p class="lead">Distingue la familia precursora NOx de la referencia de exposición a NO₂ y explora por qué el ozono responde al balance entre NOx, COV y ventilación.</p></div><div class="header-mark nox-mark" aria-hidden="true">NOx</div></header>
+      <section class="nox-layout" aria-label="Laboratorio de óxidos de nitrógeno y ozono">
+        <article class="card scene-card nox-scene-card">
+          <div class="card-head"><div><h2 id="nox-scene-title"></h2><p id="nox-scene-note"></p></div><span class="live-badge" id="nox-animation-badge"></span></div>
+          <div class="nox-view-tabs" role="tablist" aria-label="Vista del fenómeno"><button type="button" data-nox-view="sources" role="tab">Fuentes y exposición</button><button type="button" data-nox-view="chemistry" role="tab">Química del ozono</button></div>
+          <div class="scene nox-scene" id="nox-scene"></div>
+          <div class="scene-legend" id="nox-legend"></div>
+          <div class="nox-context-grid"><article><span>NOx actual del simulador</span><strong>${fmt(currentPpb, 1)} <small>ppb</small></strong><small>Valor transferido; no se vuelve a reducir dentro del experimento.</small></article><article><span>NO₂ equivalente actual</span><strong>≈ ${fmt(model.noxPpbToNo2UgM3(currentPpb), 1)} <small>µg/m³</small></strong><small>Aproximación a 25 °C y 1 atm; no es una medición de especiación.</small></article></div>
+        </article>
+        <aside class="card control-card nox-controls">
+          <div><h2>Experimenta</h2><p class="control-intro">Las medidas son demostrativas y no modifican tu plan.</p></div>
+          <div class="control-group"><label class="control-label" for="nox-concentration"><span>Concentración experimental</span><span class="control-readout" id="nox-concentration-readout"></span></label><input id="nox-concentration" type="range" min="10" max="120" step="1"><div class="range-labels"><span>10 ppb</span><span>120 ppb</span></div></div>
+          <div class="control-group"><label class="control-label" for="nox-source"><span>Fuente destacada</span></label><select id="nox-source" class="select-control"><option value="light">Tráfico liviano</option><option value="heavy">Buses y carga</option><option value="stationary">Combustión estacionaria</option><option value="mixed">Fuente mixta</option></select><small class="nox-source-note" id="nox-source-note"></small></div>
+          <div class="control-group"><label class="control-label" for="nox-measure"><span>Medida sobre NOx</span></label><select id="nox-measure" class="select-control">${Object.entries(measureLabels).map(([code, label]) => { const effect = model.policyEffects(code).nox; return `<option value="${code}">${label}${effect ? ` · ${fmt(effect * 100, 0)}%` : ""}</option>`; }).join("")}</select></div>
+          <label class="mitigation-toggle"><input id="nox-cov-control" type="checkbox"><span><strong>Aplicar P8 · Control de COV</strong><small>Reduce COV 35 % y permite observar la respuesta combinada de O₃.</small></span></label>
+          <div class="playback-controls"><button type="button" id="nox-play"></button><button type="button" id="nox-reset">Restablecer</button></div>
+          <section class="nox-results" aria-live="polite">
+            <span class="measure-name" id="nox-measure-name"></span>
+            <div class="nox-result-pair"><article><span>Antes</span><strong id="nox-before"></strong><small id="nox-before-no2"></small></article><i aria-hidden="true">→</i><article><span>Después</span><strong id="nox-after"></strong><small id="nox-after-no2"></small></article></div>
+            <strong class="nox-reduction" id="nox-reduction"></strong>
+            <div class="nox-reference"><div class="reference-track"><i id="nox-colombia-marker"><b>Colombia 1 h · 200</b></i><span class="value-marker" id="nox-value-marker"></span></div><strong id="nox-status"></strong></div>
+            <div class="nox-ozone-result"><span>Respuesta de O₃</span><strong id="nox-ozone"></strong><small id="nox-ozone-note"></small></div>
+          </section>
+        </aside>
+      </section>
+      <section class="particulate-info-grid" aria-label="Claves de interpretación de NOx y NO₂"><article class="card info-card"><span class="info-icon" aria-hidden="true">NOx</span><h2>Familia precursora</h2><p>NOx representa óxidos de nitrógeno asociados principalmente con combustión y química atmosférica.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">NO₂</span><h2>Indicador de exposición</h2><p>NO₂ es una especie de NOx utilizada como indicador por su relación con efectos respiratorios.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">O₃</span><h2>Respuesta no lineal</h2><p>El ozono depende de NOx, COV, radiación y meteorología; controlar un precursor aislado puede producir respuestas distintas.</p></article></section>
+      <section class="card nox-standards-card"><div><p class="eyebrow">Referencias con períodos distintos</p><h2>NO₂: exposición y calidad del aire</h2><p>Solo el máximo colombiano de una hora se compara con este escenario didáctico. Los valores anuales y de 24 horas son contexto y no reciben un estado.</p></div><div class="nox-standards-grid"><article><strong>Colombia</strong><span>200 µg/m³ · 1 hora</span><span>60 µg/m³ · anual</span><span>40 µg/m³ · anual desde 2030</span></article><article><strong>OMS 2021</strong><span>25 µg/m³ · 24 horas</span><span>10 µg/m³ · anual</span></article></div><div class="standards-links"><a href="https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf" target="_blank" rel="noopener">Resolución 2254 de 2017</a><a href="https://www.who.int/teams/environment-climate-change-and-health/air-quality-and-health/health-impacts/types-of-pollutants" target="_blank" rel="noopener">Guías OMS 2021</a><a href="https://www.epa.gov/no2-pollution/basic-information-about-no2" target="_blank" rel="noopener">NO₂ y NOx · EPA</a></div></section>`;
+
+    const elements = {
+      scene: document.getElementById("nox-scene"),
+      badge: document.getElementById("nox-animation-badge"),
+      concentration: document.getElementById("nox-concentration"),
+      source: document.getElementById("nox-source"),
+      measure: document.getElementById("nox-measure"),
+      covControl: document.getElementById("nox-cov-control"),
+      play: document.getElementById("nox-play")
+    };
+
+    function renderScene() {
+      const result = experiment();
+      lastScene = state.view === "sources" ? sourcesScene(result) : chemistryScene(result);
+      elements.scene.innerHTML = lastScene.svg;
+    }
+
+    function render() {
+      const result = experiment();
+      document.querySelectorAll("[data-nox-view]").forEach(button => {
+        const active = button.dataset.noxView === state.view;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.getElementById("nox-scene-title").textContent = state.view === "sources" ? "De las fuentes al punto de monitoreo" : "Balance de precursores y ozono";
+      document.getElementById("nox-scene-note").textContent = state.view === "sources" ? "La pluma representa la concentración efectiva después de la medida." : "La reacción es una simplificación determinista de las reglas del simulador.";
+      elements.badge.textContent = state.playing ? "En movimiento" : "En pausa";
+      elements.badge.classList.toggle("paused", !state.playing);
+      elements.play.textContent = state.playing ? "Pausar animación" : "Reproducir animación";
+      elements.concentration.value = state.concentration;
+      elements.source.value = state.source;
+      elements.measure.value = state.measure;
+      elements.covControl.checked = state.covControl;
+      document.getElementById("nox-concentration-readout").textContent = `${fmt(state.concentration, 0)} ppb`;
+      document.getElementById("nox-source-note").textContent = sourceLabels[state.source];
+      document.getElementById("nox-measure-name").textContent = `${measureLabels[state.measure]}${state.covControl ? " + P8" : ""}`;
+      document.getElementById("nox-before").textContent = `${fmt(result.reference.nox, 1)} ppb`;
+      document.getElementById("nox-after").textContent = `${fmt(result.values.nox, 1)} ppb`;
+      document.getElementById("nox-before-no2").textContent = `≈ ${fmt(result.no2EquivalentBefore, 1)} µg/m³ NO₂`;
+      document.getElementById("nox-after-no2").textContent = `≈ ${fmt(result.no2EquivalentAfter, 1)} µg/m³ NO₂`;
+      document.getElementById("nox-reduction").textContent = result.reductionPercent ? `Reducción de NOx: ${fmt(result.reductionPercent, 0)} %` : "Sin cambio de NOx frente al escenario experimental";
+      document.getElementById("nox-status").textContent = result.status;
+      document.getElementById("nox-status").className = result.withinLimit ? "within" : "exceeds";
+      const referenceMax = model.noxPpbToNo2UgM3(120);
+      document.getElementById("nox-colombia-marker").style.left = `${clamp(colombiaLimit / referenceMax * 100, 0, 100)}%`;
+      document.getElementById("nox-value-marker").style.left = `${clamp(result.no2EquivalentAfter / referenceMax * 100, 0, 100)}%`;
+      const ozoneSign = result.ozoneChangePercent > 0 ? "+" : "";
+      document.getElementById("nox-ozone").textContent = `${fmt(result.ozoneBefore, 1)} → ${fmt(result.ozoneAfter, 1)} ppb (${ozoneSign}${fmt(result.ozoneChangePercent, 0)} %)`;
+      document.getElementById("nox-ozone").className = result.ozoneChangePercent > 0 ? "increase" : result.ozoneChangePercent < 0 ? "decrease" : "stable";
+      document.getElementById("nox-ozone-note").textContent = result.ozoneChangePercent > 0 ? "La reducción aislada de NOx entra en el régimen simplificado que incrementa O₃." : result.ozoneChangePercent < 0 ? "El balance de COV o la ventilación reduce el O₃ en el modelo." : "La combinación no activa un cambio de O₃ en las reglas actuales.";
+      document.getElementById("nox-legend").innerHTML = state.view === "sources" ? `<span class="legend-item"><i class="legend-dot" style="--dot:#2563a8"></i>NOx en la pluma</span><span class="legend-item"><i class="legend-dot" style="--dot:#319b9b"></i>Ventilación</span><span class="legend-item"><i class="legend-dot" style="--dot:#17202a"></i>NO₂ equivalente</span>` : `<span class="legend-item"><i class="legend-dot" style="--dot:#2563a8"></i>NOx</span><span class="legend-item"><i class="legend-dot" style="--dot:#7c4d9e"></i>COV</span><span class="legend-item"><i class="legend-dot" style="--dot:#d9822b"></i>O₃</span>`;
+      renderScene();
+    }
+
+    const viewButtons = [...document.querySelectorAll("[data-nox-view]")];
+    viewButtons.forEach((button, index) => {
+      button.addEventListener("click", () => { state.view = button.dataset.noxView; render(); });
+      button.addEventListener("keydown", event => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const next = viewButtons[(index + direction + viewButtons.length) % viewButtons.length];
+        state.view = next.dataset.noxView;
+        render();
+        next.focus();
+      });
+    });
+    elements.concentration.addEventListener("input", () => { state.concentration = Number(elements.concentration.value); render(); });
+    elements.source.addEventListener("change", () => { state.source = elements.source.value; render(); });
+    elements.measure.addEventListener("change", () => { state.measure = elements.measure.value; render(); });
+    elements.covControl.addEventListener("change", () => { state.covControl = elements.covControl.checked; render(); });
+    elements.play.addEventListener("click", () => { state.playing = !state.playing; render(); });
+    document.getElementById("nox-reset").addEventListener("click", () => { Object.assign(state, { view: "sources", concentration: model.baseline.nox, source: "mixed", measure: "none", covControl: false, playing: !reducedMotion, phase: 0 }); render(); });
+    document.getElementById("nox-close").addEventListener("click", () => {
+      if (embedded && window.parent !== window) window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      else if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) history.back();
+      else location.href = "index.html";
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && embedded && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      }
+    });
+
+    function renderResourceToText() {
+      const result = experiment();
+      return JSON.stringify({
+        resource: "nox",
+        view: state.view,
+        coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
+        current: { noxPpb: Number(currentPpb.toFixed(2)), no2EquivalentUgM3: Number(model.noxPpbToNo2UgM3(currentPpb).toFixed(2)) },
+        experiment: { beforeNoxPpb: Number(result.reference.nox.toFixed(2)), afterNoxPpb: Number(result.values.nox.toFixed(2)), beforeNo2EquivalentUgM3: Number(result.no2EquivalentBefore.toFixed(2)), afterNo2EquivalentUgM3: Number(result.no2EquivalentAfter.toFixed(2)), reductionPercent: Number(result.reductionPercent.toFixed(1)), status: result.status },
+        source: state.source,
+        measures: { nox: state.measure, cov: state.covControl ? "P8" : "none" },
+        chemistry: { covBeforeUgM3: Number(result.reference.cov.toFixed(2)), covAfterUgM3: Number(result.values.cov.toFixed(2)), windBeforeMs: Number(result.reference.wind.toFixed(2)), windAfterMs: Number(result.values.wind.toFixed(2)), ozoneBeforePpb: Number(result.ozoneBefore.toFixed(2)), ozoneAfterPpb: Number(result.ozoneAfter.toFixed(2)), ozoneChangePercent: Number(result.ozoneChangePercent.toFixed(1)), factors: Object.fromEntries(Object.entries(result.ozoneFactors).map(([key, value]) => [key, Number((value * 100).toFixed(1))])) },
+        references: { colombiaOneHourUgM3: colombiaLimit, colombiaOneHourApproxPpb: Number(colombiaLimitPpb.toFixed(2)), contextualOnly: { colombiaAnnual: 60, colombiaAnnual2030: 40, whoAnnual: 10, who24h: 25 } },
+        animation: { playing: state.playing, phase: Number(state.phase.toFixed(3)) },
+        visible: { noxMolecules: lastScene.noxMolecules, covMolecules: lastScene.covMolecules, ozoneMolecules: lastScene.ozoneMolecules, emitters: lastScene.emitters, windArrows: lastScene.windArrows }
+      });
+    }
+
+    window.RESOURCE = { kind: "nox-no2-ozone" };
+    window.render_resource_to_text = renderResourceToText;
+    window.render_game_to_text = renderResourceToText;
+    window.advanceTime = ms => {
+      if (state.playing) state.phase = (state.phase + Math.max(0, Number(ms) || 0) / 6000) % 1;
+      renderScene();
+      return renderResourceToText();
+    };
+
+    let lastFrame = performance.now();
+    function animateNox(now) {
+      const delta = Math.min(50, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      if (state.playing) {
+        state.phase = (state.phase + delta / 6000) % 1;
+        renderScene();
+      }
+      requestAnimationFrame(animateNox);
+    }
+    render();
+    if (!window.__vt_pending) requestAnimationFrame(animateNox);
+  }
+
   const key = document.body.dataset.resource;
   const root = document.getElementById("resource-app");
   if (!root) return;
@@ -999,6 +1279,11 @@
 
   if (key === "co2") {
     renderCo2Lab(root);
+    return;
+  }
+
+  if (key === "nox") {
+    renderNoxLab(root);
     return;
   }
 

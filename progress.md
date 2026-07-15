@@ -133,3 +133,13 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Decisión de plan: conservar `nox` como variable interna, separar NOx precursor de NO₂ equivalente para exposición y comparar únicamente períodos compatibles.
 - Referencias verificadas: Colombia establece para NO₂ 200 µg/m³ en 1 hora y 60 µg/m³ anual, con meta anual de 40 µg/m³ desde 2030; OMS 2021 recomienda 10 µg/m³ anual y 25 µg/m³ en 24 horas.
 - Alcance de esta iteración: auditoría, criterios y plan documentados; la implementación del nuevo laboratorio NOx queda pendiente de autorización explícita.
+- Implementación iniciada: se añadió `modelo-nox.js` como fuente compartida de coeficientes, conversión NO₂ equivalente y respuesta NOx–COV–meteorología–O₃.
+- Implementación inicial: el recurso NOx ya tiene vistas de fuentes y química, controles de concentración/fuente/P1–P9/P8, resultados antes/después, referencias y animación determinista.
+- Integración inicial: la tarjeta NOx abre el diálogo educativo y usa `current`; la ruta directa conserva `value`, añade favicon y mantiene cierre interno.
+- Verificación estructural: ambos JavaScript pasan validación de sintaxis; la auditoría de 370 combinaciones conserva 39 planes aceptables tras centralizar los efectos.
+- Verificación funcional final: `current`, `value`, precedencia y ruta sin parámetros funcionan; 10/94/106/107/120 ppb producen cifras y estados correctos, con 94 ppb ≈ 176,9 µg/m³.
+- Verificación de políticas: P1, P2, P3, P4, P6, P8 y P9, además de todas sus combinaciones previstas con P8, coinciden con el modelo compartido; P6+P8 incorpora −21 % de O₃ por química y ventilación.
+- Verificación determinista: 600 ms avanzan 0,1 de fase al reproducir; pausa conserva el fotograma, restablecer recupera 94 ppb/fuente mixta/sin medidas/fase cero y movimiento reducido inicia y restablece en pausa.
+- Verificación integrada: con P1 seleccionado y 35 puntos usados, cierre interno, mensaje, Escape desde el iframe y botón externo conservan plan, presupuesto, año e historial y restauran el foco a NOx.
+- Verificación visual y accesible: vistas de fuentes y química revisadas en 1280×900 y 390×844, además del diálogo en ambos tamaños; sin desbordamiento, moléculas fuera del `viewBox`, errores de consola ni 404; pestañas operables con flechas.
+- Regresión final: PM2.5/PM10, CO₂ y O₃ cargan con el cliente determinista oficial; estados textuales y capturas permanecen coherentes.
