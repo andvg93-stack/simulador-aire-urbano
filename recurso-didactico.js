@@ -107,24 +107,6 @@
     };
   }
 
-  function co2Scene(level) {
-    const cars = Math.round(2 + level * 6);
-    const bubbles = deterministicDots(Math.round(5 + level * 15), { x: 46, y: 35, width: 620, height: 190, color: "#657985", minRadius: 7, maxRadius: 15, opacity: 0.24 });
-    const carMarkup = Array.from({ length: cars }, (_, index) => car(38 + index * 92, 326, index % 2 ? palette.blue : palette.red, 0.82)).join("");
-    return {
-      svg: svgFrame("Calle urbana donde el tráfico incrementa el dióxido de carbono", `
-        <rect width="720" height="320" fill="url(#sky)"/>
-        <circle cx="650" cy="64" r="35" fill="${palette.yellow}" opacity=".88"/>
-        ${bubbles}${buildings(310)}
-        <rect y="306" width="720" height="94" fill="${palette.road}"/>
-        <line x1="0" y1="355" x2="720" y2="355" stroke="#f6df76" stroke-width="4" stroke-dasharray="28 22"/>
-        ${carMarkup}
-        <g transform="translate(28 24)"><rect width="158" height="42" rx="21" fill="#fff" opacity=".92"/><circle cx="22" cy="21" r="8" fill="#657985" opacity=".45"/><text x="42" y="26" font-size="13" font-weight="800" fill="${palette.ink}">Actividad vehicular</text></g>
-      `, "#edf3f7"),
-      legend: [{ label: "CO₂ indicativo", color: "#657985" }, { label: "Tráfico urbano", color: palette.red }]
-    };
-  }
-
   function noxScene(level) {
     const cars = Math.round(2 + level * 6);
     const carMarkup = Array.from({ length: cars }, (_, index) => {
@@ -330,15 +312,6 @@
       primary: { id: "concentration", label: "Concentración de PM10", min: 10, max: 120, step: .1, value: 50, unit: "µg/m³", low: "10", high: "120", digits: 1 },
       compute: s => { const r = ratio(s.concentration, 10, 120); return { value: s.concentration, digits: 1, unit: "µg/m³", category: categoryFor(r), tone: toneFor(r), explanation: r < .38 ? "Hay pocas partículas gruesas visibles en la trayectoria urbana." : r < .68 ? "El polvo resuspendido gana importancia y conviene controlar vías y obras." : "La concentración alta hace prioritario actuar sobre fuentes de polvo y material suelto.", scene: pmScene(r, "pm10") }; },
       info: info.pm10, challenge: "Compara la escala de PM10 y PM2.5 y localiza dónde cambia su penetración respiratoria."
-    },
-    co2: {
-      title: "CO₂", eyebrow: "Indicador de combustión urbana", mark: "CO₂", accent: "#506773", tint: "#edf3f7",
-      lead: "El dióxido de carbono ayuda a representar combustión y actividad vehicular, aunque no es el contaminante criterio local más tóxico a estas escalas.",
-      primary: { id: "traffic", label: "Intensidad del tráfico", min: 0, max: 100, step: 1, value: 55, unit: "%", low: "Tráfico bajo", high: "Tráfico alto" },
-      fromQuery: value => clamp((value - 410) / 1.7, 0, 100),
-      compute: s => { const r = s.traffic / 100; const value = 410 + s.traffic * 1.7; return { value, digits: 0, unit: "ppm", category: categoryFor(r, ["Actividad baja", "Actividad media", "Actividad alta"]), tone: r < .68 ? "info" : "warn", explanation: "Al aumentar el tráfico crecen los vehículos y la señal estimada de CO₂. La cifra es una relación didáctica, no una medición ambiental.", scene: co2Scene(r) }; },
-      info: [{ icon: "🚗", title: "Fuente", text: "Motores, combustión y consumo de combustibles en la ciudad." }, { icon: "📍", title: "Interpretación", text: "Aquí funciona como indicador de actividad, no como índice local de toxicidad." }, { icon: "🔌", title: "Acciones", text: "Movilidad eléctrica, transporte público y reducción de viajes motorizados." }],
-      challenge: "¿Qué cambia en la calle cuando duplicas la intensidad del tráfico?"
     },
     nox: {
       title: "NOx", eyebrow: "Óxidos de nitrógeno", mark: "NOx", accent: "#2563a8", tint: "#eaf3fa",
@@ -737,15 +710,289 @@
     if (!window.__vt_pending) requestAnimationFrame(animateParticulate);
   }
 
+  const co2Measures = {
+    none: { code: "none", label: "Sin medida", effect: 0 },
+    P1: { code: "P1", label: "P1 · Zona de bajas emisiones", effect: -.10 },
+    P2: { code: "P2", label: "P2 · Buses eléctricos", effect: -.15 },
+    P3: { code: "P3", label: "P3 · Restricción vehicular", effect: -.05 },
+    P4: { code: "P4", label: "P4 · Ciclorrutas y vías peatonales", effect: -.07 },
+    P5: { code: "P5", label: "P5 · Arborización urbana", effect: -.03 },
+    P9: { code: "P9", label: "P9 · Teletrabajo y horarios", effect: -.05 }
+  };
+
+  function renderCo2Lab(root) {
+    const params = new URLSearchParams(location.search);
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const embedded = params.get("embedded") === "1";
+    const requestedView = params.get("view");
+    const initialView = requestedView === "climate" ? "climate" : "sources";
+    const currentParam = Number(params.get("current"));
+    const legacyParam = Number(params.get("value"));
+    const hasCurrent = params.has("current") && Number.isFinite(currentParam);
+    const hasLegacy = params.has("value") && Number.isFinite(legacyParam);
+    const currentIndex = clamp(hasCurrent ? currentParam : hasLegacy ? legacyParam / 496 * 100 : 100, 0, 200);
+    const state = {
+      view: initialView,
+      activity: 100,
+      source: "mixed",
+      measure: "none",
+      playing: !reducedMotion,
+      phase: 0
+    };
+    let lastScene = { molecules: 0, emitters: [], energyArrows: 0 };
+
+    const sourceLabels = {
+      mobility: "Movilidad: vehículos y transporte urbano.",
+      energy: "Edificios y energía: combustión asociada al consumo urbano.",
+      mixed: "Mezcla urbana: movilidad, edificios y consumo de energía."
+    };
+
+    function experiment() {
+      const measure = co2Measures[state.measure];
+      const before = state.activity;
+      const after = before * (1 + measure.effect);
+      const reduction = Math.max(0, -measure.effect * 100);
+      let status = "Sin cambio respecto al escenario base";
+      if (after < 99.95) status = `${fmt(100 - after, 1)}% por debajo del escenario base`;
+      if (after > 100.05) status = `${fmt(after - 100, 1)}% por encima del escenario base`;
+      return { measure, before, after, reduction, status };
+    }
+
+    function moleculeMarkup(count, mode) {
+      const molecules = [];
+      for (let index = 0; index < count; index += 1) {
+        const progress = (state.phase + index / count) % 1;
+        let x;
+        let y;
+        if (mode === "climate") {
+          x = 55 + ((index * 79 + progress * 170) % 610);
+          y = 80 + ((index * 43) % 128) + Math.sin((progress + index) * Math.PI * 2) * 5;
+        } else {
+          const mobility = state.source === "mobility" || (state.source === "mixed" && index % 2 === 0);
+          const startX = mobility ? 62 + (index % 4) * 76 : 318 + (index % 4) * 78;
+          const startY = mobility ? 324 : 254 + (index % 2) * 18;
+          const eased = 1 - ((1 - progress) ** 2);
+          x = startX + (438 - startX) * eased + Math.sin((progress + index) * Math.PI * 2) * 12;
+          y = startY + (72 - startY) * eased;
+        }
+        molecules.push(`<g class="co2-molecule" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="9" fill="#506773" opacity=".9"/><text x="0" y="3.5" text-anchor="middle" font-size="7" font-weight="900" fill="#fff">CO₂</text></g>`);
+      }
+      return molecules.join("");
+    }
+
+    function urbanScene(result) {
+      const count = Math.round(8 + ratio(state.activity, 50, 150) * 18);
+      const mobilityActive = state.source === "mobility" || state.source === "mixed";
+      const energyActive = state.source === "energy" || state.source === "mixed";
+      const emitters = [mobilityActive ? "movilidad" : null, energyActive ? "edificios y energía" : null].filter(Boolean);
+      const carsMarkup = [52, 132, 212].map((x, index) => car(x, 321, index % 2 ? palette.blue : palette.red, .68)).join("");
+      const svg = svgFrame("Fuentes urbanas emitiendo dióxido de carbono que se mezcla con la atmósfera", `
+        <rect width="720" height="330" fill="url(#sky)"/>
+        <rect width="720" height="102" fill="#bddae5" opacity=".55"/>
+        <path d="M0 98 C170 76 320 116 482 88 C585 70 652 84 720 72" fill="none" stroke="#6b8795" stroke-width="2" stroke-dasharray="8 9" opacity=".55"/>
+        <text x="28" y="34" font-size="12" font-weight="900" fill="#45616e">MEZCLA ATMOSFÉRICA</text>
+        ${buildings(320)}
+        <g opacity="${energyActive ? 1 : .28}">
+          <rect x="500" y="219" width="142" height="101" rx="6" fill="#657d89"/>
+          <rect x="530" y="156" width="28" height="85" rx="3" fill="#506773"/>
+          <path d="M576 220v-38l34 20 30-20v38" fill="#8197a1"/>
+          <text x="571" y="286" text-anchor="middle" font-size="12" font-weight="900" fill="#fff">ENERGÍA</text>
+        </g>
+        <rect y="320" width="720" height="80" fill="${palette.road}"/>
+        <line x1="0" y1="361" x2="720" y2="361" stroke="#f6df76" stroke-width="4" stroke-dasharray="28 22"/>
+        <g opacity="${mobilityActive ? 1 : .28}">${carsMarkup}</g>
+        ${moleculeMarkup(count, "sources")}
+        <g transform="translate(478 24)"><rect width="214" height="58" rx="14" fill="#fff" opacity=".94"/><text x="16" y="22" font-size="11" font-weight="800" fill="#60737d">ÍNDICE EXPERIMENTAL</text><text x="16" y="47" font-size="25" font-weight="900" fill="#17202a">${fmt(result.after, 1)}</text><text x="118" y="47" font-size="10" font-weight="800" fill="#60737d">base = 100</text></g>
+      `, "#edf3f7");
+      return { svg, molecules: count, emitters, energyArrows: 0 };
+    }
+
+    function climateScene() {
+      const count = Math.round(13 + ratio(state.activity, 50, 150) * 9);
+      const pulse = 4 + Math.sin(state.phase * Math.PI * 2) * 3;
+      const svg = svgFrame("Representación didáctica del dióxido de carbono atmosférico y el flujo de energía del efecto invernadero", `
+        <defs><linearGradient id="climate-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#274f67"/><stop offset="1" stop-color="#b9dce7"/></linearGradient></defs>
+        <rect width="720" height="400" fill="url(#climate-sky)"/>
+        <circle cx="83" cy="62" r="38" fill="#f4cc63"/>
+        <g stroke="#f4cc63" stroke-width="7" stroke-linecap="round" opacity=".92"><path d="M118 86 238 224"/><path d="M151 52 306 205"/></g>
+        <path d="M34 322 Q360 174 686 322 L720 400 H0z" fill="#287c70"/>
+        <path d="M96 320 Q360 214 624 320" fill="none" stroke="#d7edf1" stroke-width="5" opacity=".62"/>
+        ${moleculeMarkup(count, "climate")}
+        <g fill="none" stroke="#ef8b55" stroke-width="8" stroke-linecap="round">
+          <path d="M286 302 C274 245 286 205 270 ${126 + pulse}"/>
+          <path d="M376 292 C390 236 382 197 406 ${115 + pulse}"/>
+          <path d="M485 306 C500 247 496 207 522 ${146 + pulse}"/>
+        </g>
+        <g fill="#ef8b55"><path d="m270 ${112 + pulse}-12 22h24z"/><path d="m406 ${101 + pulse}-12 22h24z"/><path d="m522 ${132 + pulse}-12 22h24z"/></g>
+        <path d="M429 125 C464 166 447 215 412 248" fill="none" stroke="#d45850" stroke-width="7" stroke-linecap="round" stroke-dasharray="10 9"/>
+        <path d="m412 259-4-25 24 9z" fill="#d45850"/>
+        <g transform="translate(27 104)"><rect width="235" height="82" rx="15" fill="#fff" opacity=".94"/><text x="18" y="23" font-size="11" font-weight="900" fill="#60737d">REFERENCIA ATMOSFÉRICA</text><text x="18" y="52" font-size="28" font-weight="900" fill="#17202a">431 ppm</text><text x="18" y="70" font-size="10" font-weight="800" fill="#60737d">junio de 2026 · no es un límite</text></g>
+        <g transform="translate(444 336)"><rect width="247" height="42" rx="13" fill="#fff" opacity=".94"/><text x="123.5" y="17" text-anchor="middle" font-size="10" font-weight="900" fill="#36515e">SIMPLIFICACIÓN DIDÁCTICA</text><text x="123.5" y="32" text-anchor="middle" font-size="9" fill="#60737d">El control urbano no modifica esta cifra.</text></g>
+      `, "#dceef4");
+      return { svg, molecules: count, emitters: ["atmósfera global"], energyArrows: 5 };
+    }
+
+    document.title = "Laboratorio de emisiones y CO₂ atmosférico";
+    document.documentElement.style.setProperty("--accent", "#506773");
+    document.documentElement.style.setProperty("--scene-tint", "#edf3f7");
+    document.body.classList.toggle("embedded-resource", embedded);
+    root.className = "resource-shell co2-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back particulate-close" id="co2-close" type="button">${embedded ? "← Cerrar laboratorio" : "← Volver al simulador"}</button><span class="resource-tag">Laboratorio de carbono</span></nav>
+      <header class="resource-header co2-header"><div><p class="eyebrow">Emisiones urbanas y clima</p><h1>CO₂: flujo y concentración</h1><p class="lead">Explora por qué reducir emisiones urbanas cambia un flujo, mientras la concentración atmosférica en ppm responde a acumulación, mezcla y procesos globales.</p></div><div class="header-mark co2-mark" aria-hidden="true">CO₂</div></header>
+      <section class="co2-layout" aria-label="Laboratorio de emisiones urbanas de dióxido de carbono">
+        <article class="card scene-card co2-scene-card">
+          <div class="card-head"><div><h2 id="co2-scene-title">De las fuentes a la atmósfera</h2><p id="co2-scene-note">La cantidad de moléculas representa un flujo relativo, no una medición local.</p></div><span class="live-badge" id="co2-animation-badge"></span></div>
+          <div class="co2-view-tabs" role="tablist" aria-label="Vista del fenómeno"><button type="button" data-view="sources" role="tab">Fuentes urbanas</button><button type="button" data-view="climate" role="tab">Atmósfera y clima</button></div>
+          <div class="scene co2-scene" id="co2-scene"></div>
+          <div class="scene-legend" id="co2-legend"></div>
+          <div class="co2-context-grid">
+            <article><span>Índice actual del simulador</span><strong id="co2-current-index">${fmt(currentIndex, 1)}</strong><small>Base original = 100</small></article>
+            <article><span>Atmósfera · junio de 2026</span><strong>431 <small>ppm</small></strong><small>Referencia global; no es un límite normativo.</small></article>
+          </div>
+        </article>
+        <aside class="card control-card co2-controls">
+          <div><h2>Experimenta</h2><p class="control-intro">El experimento parte siempre de índice 100 y no modifica tu plan.</p></div>
+          <div class="control-group"><label class="control-label" for="co2-activity"><span>Actividad relativa</span><span class="control-readout" id="co2-activity-readout">100 %</span></label><input id="co2-activity" type="range" min="50" max="150" step="1" value="100"><div class="range-labels"><span>50 %</span><span>150 %</span></div></div>
+          <div class="control-group"><label class="control-label" for="co2-source"><span>Fuente destacada</span></label><select id="co2-source" class="select-control"><option value="mobility">Movilidad</option><option value="energy">Edificios y energía</option><option value="mixed" selected>Fuente mixta</option></select><small class="co2-source-note" id="co2-source-note"></small></div>
+          <div class="control-group"><label class="control-label" for="co2-measure"><span>Aplicar medida</span></label><select id="co2-measure" class="select-control">${Object.values(co2Measures).map(item => `<option value="${item.code}">${item.label}${item.effect ? ` · ${fmt(item.effect * 100, 0)}%` : ""}</option>`).join("")}</select></div>
+          <div class="playback-controls"><button type="button" id="co2-play"></button><button type="button" id="co2-reset">Restablecer</button></div>
+          <div class="co2-results" aria-live="polite">
+            <div class="co2-result-pair"><article><span>Antes</span><strong id="co2-before"></strong></article><i aria-hidden="true">→</i><article><span>Después</span><strong id="co2-after"></strong></article></div>
+            <p id="co2-reduction"></p><strong class="co2-status" id="co2-status"></strong>
+          </div>
+          <p class="didactic-note">El índice compara emisiones relativas. Las ppm describen cuántas moléculas de CO₂ hay por millón de moléculas de aire seco y no cambian instantáneamente con este control.</p>
+        </aside>
+      </section>
+      <section class="particulate-info-grid" aria-label="Claves de interpretación del dióxido de carbono">
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">↗</span><h2>Flujo y acumulación</h2><p>Las emisiones agregan CO₂ a la atmósfera. La concentración resulta del balance acumulado entre fuentes, mezcla y sumideros.</p></article>
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">≠</span><h2>CO₂ no es CO</h2><p>CO₂ es un gas de efecto invernadero. No es el monóxido de carbono ni se clasifica aquí con un semáforo sanitario local.</p></article>
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">☀</span><h2>Efecto climático</h2><p>Una mayor concentración de gases de efecto invernadero ralentiza la pérdida de energía hacia el espacio.</p></article>
+      </section>
+      <section class="card co2-reference-card">
+        <div><p class="eyebrow">Contexto atmosférico independiente</p><h2>Tendencia global de CO₂</h2><p>Serie ilustrativa con valores redondeados a partir de observaciones globales. La referencia de 431 ppm corresponde a junio de 2026 y no es un máximo colombiano de calidad del aire.</p></div>
+        <svg class="co2-history" viewBox="0 0 520 150" role="img" aria-label="Tendencia creciente del dióxido de carbono atmosférico desde 1980 hasta 2026"><line x1="35" y1="122" x2="500" y2="122" stroke="#b6c4ca"/><line x1="35" y1="20" x2="35" y2="122" stroke="#b6c4ca"/><path d="M35 112 L134 97 L235 78 L336 58 L437 34 L500 20" fill="none" stroke="#506773" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M35 112 L134 97 L235 78 L336 58 L437 34 L500 20 L500 122 L35 122z" fill="#a9c5d1" opacity=".28"/><g fill="#506773">${[[35,112],[134,97],[235,78],[336,58],[437,34],[500,20]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="5"/>`).join("")}</g><text x="35" y="143" font-size="11" fill="#5f6f7a">1980 · ~339 ppm</text><text x="500" y="143" text-anchor="end" font-size="11" fill="#5f6f7a">jun. 2026 · 431 ppm</text></svg>
+        <div class="standards-links"><a href="https://gml.noaa.gov/ccgg/trends/gl_full.html" target="_blank" rel="noopener">Serie global NOAA</a><a href="https://science.nasa.gov/earth/explore/earth-indicators/carbon-dioxide/" target="_blank" rel="noopener">Indicador de CO₂ de NASA</a><a href="https://science.nasa.gov/climate-change/causes/" target="_blank" rel="noopener">Efecto invernadero · NASA</a><a href="https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf" target="_blank" rel="noopener">Resolución 2254 de 2017</a></div>
+      </section>`;
+
+    const elements = {
+      scene: document.getElementById("co2-scene"),
+      badge: document.getElementById("co2-animation-badge"),
+      activity: document.getElementById("co2-activity"),
+      source: document.getElementById("co2-source"),
+      measure: document.getElementById("co2-measure"),
+      play: document.getElementById("co2-play")
+    };
+
+    function renderScene() {
+      const result = experiment();
+      lastScene = state.view === "sources" ? urbanScene(result) : climateScene();
+      elements.scene.innerHTML = lastScene.svg;
+    }
+
+    function render() {
+      const result = experiment();
+      document.querySelectorAll("[data-view]").forEach(button => {
+        const active = button.dataset.view === state.view;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      document.getElementById("co2-scene-title").textContent = state.view === "sources" ? "De las fuentes a la atmósfera" : "Atmósfera y efecto invernadero";
+      document.getElementById("co2-scene-note").textContent = state.view === "sources" ? "La cantidad de moléculas representa un flujo relativo, no una medición local." : "La energía se representa de forma cualitativa; no es un modelo climático numérico.";
+      document.getElementById("co2-activity-readout").textContent = `${fmt(state.activity, 0)} %`;
+      document.getElementById("co2-source-note").textContent = sourceLabels[state.source];
+      elements.activity.value = state.activity;
+      elements.source.value = state.source;
+      elements.measure.value = state.measure;
+      elements.play.textContent = state.playing ? "Pausar animación" : "Reproducir animación";
+      elements.badge.textContent = state.playing ? "En movimiento" : "En pausa";
+      elements.badge.classList.toggle("paused", !state.playing);
+      document.getElementById("co2-before").textContent = fmt(result.before, 1);
+      document.getElementById("co2-after").textContent = fmt(result.after, 1);
+      document.getElementById("co2-reduction").textContent = result.reduction ? `${result.measure.code}: reducción del ${fmt(result.reduction, 0)}% en el modelo principal.` : "Sin medida: el índice depende únicamente de la actividad relativa.";
+      document.getElementById("co2-status").textContent = result.status;
+      document.getElementById("co2-legend").innerHTML = state.view === "sources"
+        ? `<span class="legend-item"><i class="legend-dot" style="--dot:#506773"></i>Flujo relativo de CO₂</span><span class="legend-item"><i class="legend-dot" style="--dot:#be3a34"></i>Movilidad</span><span class="legend-item"><i class="legend-dot" style="--dot:#8097a1"></i>Edificios y energía</span>`
+        : `<span class="legend-item"><i class="legend-dot" style="--dot:#506773"></i>CO₂ atmosférico</span><span class="legend-item"><i class="legend-dot" style="--dot:#f4cc63"></i>Energía solar</span><span class="legend-item"><i class="legend-dot" style="--dot:#ef8b55"></i>Energía infrarroja</span>`;
+      renderScene();
+    }
+
+    document.querySelectorAll("[data-view]").forEach(button => button.addEventListener("click", () => { state.view = button.dataset.view; render(); }));
+    elements.activity.addEventListener("input", () => { state.activity = Number(elements.activity.value); render(); });
+    elements.source.addEventListener("change", () => { state.source = elements.source.value; render(); });
+    elements.measure.addEventListener("change", () => { state.measure = elements.measure.value; render(); });
+    elements.play.addEventListener("click", () => { state.playing = !state.playing; render(); });
+    document.getElementById("co2-reset").addEventListener("click", () => {
+      Object.assign(state, { view: initialView, activity: 100, source: "mixed", measure: "none", playing: !reducedMotion, phase: 0 });
+      render();
+    });
+    document.getElementById("co2-close").addEventListener("click", () => {
+      if (embedded && window.parent !== window) {
+        window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      } else if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) {
+        history.back();
+      } else {
+        location.href = "index.html";
+      }
+    });
+
+    function renderResourceToText() {
+      const result = experiment();
+      return JSON.stringify({
+        resource: "co2",
+        view: state.view,
+        coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
+        indices: { current: Number(currentIndex.toFixed(2)), before: Number(result.before.toFixed(2)), after: Number(result.after.toFixed(2)), base: 100 },
+        atmosphericReference: { value: 431, unit: "ppm", date: "junio de 2026", regulatoryLimit: false },
+        activity: state.activity,
+        source: state.source,
+        measure: { code: result.measure.code, effectPercent: Number((result.measure.effect * 100).toFixed(1)) },
+        reductionPercent: Number(result.reduction.toFixed(1)),
+        status: result.status,
+        animation: { playing: state.playing, phase: Number(state.phase.toFixed(3)) },
+        visible: { molecules: lastScene.molecules, emitters: lastScene.emitters, energyArrows: lastScene.energyArrows }
+      });
+    }
+
+    window.RESOURCE = { kind: "co2-emissions-and-climate" };
+    window.render_resource_to_text = renderResourceToText;
+    window.render_game_to_text = renderResourceToText;
+    window.advanceTime = ms => {
+      if (state.playing) state.phase = (state.phase + Math.max(0, Number(ms) || 0) / 6000) % 1;
+      renderScene();
+      return renderResourceToText();
+    };
+
+    let lastFrame = performance.now();
+    function animateCo2(now) {
+      const delta = Math.min(50, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      if (state.playing) {
+        state.phase = (state.phase + delta / 6000) % 1;
+        renderScene();
+      }
+      requestAnimationFrame(animateCo2);
+    }
+    render();
+    if (!window.__vt_pending) requestAnimationFrame(animateCo2);
+  }
+
   const key = document.body.dataset.resource;
-  const config = resources[key];
   const root = document.getElementById("resource-app");
-  if (!config || !root) return;
+  if (!root) return;
 
   if (key === "pm25" || key === "pm10") {
     renderParticulateLab(key, root);
     return;
   }
+
+  if (key === "co2") {
+    renderCo2Lab(root);
+    return;
+  }
+
+  const config = resources[key];
+  if (!config) return;
 
   const state = {};
   const controls = [config.primary, ...(config.secondary || [])];

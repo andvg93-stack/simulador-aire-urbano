@@ -758,8 +758,8 @@
 
 <dialog id="educational-resource-dialog" aria-labelledby="educational-resource-title">
   <div class="resource-dialog-shell">
-    <div class="resource-dialog-head"><div><strong id="educational-resource-title">Laboratorio de material particulado</strong><span>La exploración no modifica tu plan ambiental.</span></div><button id="educational-resource-close" type="button" aria-label="Cerrar laboratorio">×</button></div>
-    <iframe id="educational-resource-frame" title="Laboratorio comparativo de PM2.5 y PM10"></iframe>
+    <div class="resource-dialog-head"><div><strong id="educational-resource-title">Laboratorio educativo</strong><span id="educational-resource-description">La exploración no modifica tu plan ambiental.</span></div><button id="educational-resource-close" type="button" aria-label="Cerrar laboratorio">×</button></div>
+    <iframe id="educational-resource-frame" title="Laboratorio educativo interactivo"></iframe>
   </div>
 </dialog>
 
@@ -787,7 +787,7 @@ const YEAR_DURATION_MS = 4500;
 const baseline = {
   pm25: 67.0,
   pm10: 98.1,
-  co2: 496,
+  co2: 100,
   nox: 94,
   o3: 20.2,
   cov: 33.9,
@@ -818,7 +818,7 @@ const policies = [
 const paramDefinitions = [
   { key: "pm25", label: "PM2.5", unit: "µg/m³", averaging: "24 h", min: 5, max: 80, digits: 1, inverse: true, resource: "recurso-pm25.html" },
   { key: "pm10", label: "PM10", unit: "µg/m³", averaging: "24 h", min: 10, max: 120, digits: 1, inverse: true, resource: "recurso-pm10.html" },
-  { key: "co2", label: "CO₂", unit: "ppm", min: 400, max: 700, digits: 0, inverse: true, resource: "recurso-co2.html" },
+  { key: "co2", label: "Emisiones CO₂", unit: "índice", min: 65, max: 115, digits: 1, inverse: true, resource: "recurso-co2.html" },
   { key: "nox", label: "NOx", unit: "ppb", min: 10, max: 120, digits: 0, inverse: true, resource: "recurso-nox.html" },
   { key: "o3", label: "O₃", unit: "ppb", min: 10, max: 60, digits: 1, inverse: true, resource: "recurso-ozono.html" },
   { key: "cov", label: "COV", unit: "µg/m³", min: 5, max: 50, digits: 1, inverse: true, resource: "recurso-cov.html" },
@@ -896,6 +896,8 @@ function fmtBudget(value) {
 const educationalResourceDialog = document.getElementById("educational-resource-dialog");
 const educationalResourceFrame = document.getElementById("educational-resource-frame");
 const educationalResourceClose = document.getElementById("educational-resource-close");
+const educationalResourceTitle = document.getElementById("educational-resource-title");
+const educationalResourceDescription = document.getElementById("educational-resource-description");
 let educationalResourceReturnFocus = null;
 let educationalResourceFocus = null;
 
@@ -910,20 +912,33 @@ function particulateResourceUrl(focus, values, embedded = false) {
   return `recurso-${focus}.html?${params.toString()}`;
 }
 
-function openParticulateResource(focus, trigger) {
+function educationalResourceUrl(resource, values, embedded = false) {
+  if (resource === "pm25" || resource === "pm10") return particulateResourceUrl(resource, values, embedded);
+  const params = new URLSearchParams({ current: Number(values.co2).toFixed(1) });
+  if (embedded) params.set("embedded", "1");
+  return `recurso-co2.html?${params.toString()}`;
+}
+
+function openEducationalResource(resource, trigger) {
   const values = calculateValues(currentYear);
   educationalResourceReturnFocus = trigger || document.activeElement;
-  educationalResourceFocus = focus;
-  educationalResourceFrame.src = particulateResourceUrl(focus, values, true);
+  educationalResourceFocus = resource;
+  const particulate = resource === "pm25" || resource === "pm10";
+  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : "Laboratorio de emisiones de CO₂";
+  educationalResourceDescription.textContent = particulate
+    ? "Compara PM2.5 y PM10 sin modificar tu plan ambiental."
+    : "Distingue emisiones urbanas y concentración atmosférica sin modificar tu plan.";
+  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
+  educationalResourceFrame.src = educationalResourceUrl(resource, values, true);
   if (!educationalResourceDialog.open) educationalResourceDialog.showModal();
   educationalResourceClose.focus();
 }
 
-function closeParticulateResource() {
+function closeEducationalResource() {
   if (educationalResourceDialog.open) educationalResourceDialog.close();
 }
 
-educationalResourceClose.addEventListener("click", closeParticulateResource);
+educationalResourceClose.addEventListener("click", closeEducationalResource);
 educationalResourceDialog.addEventListener("close", () => {
   educationalResourceFrame.src = "about:blank";
   educationalResourceFocus = null;
@@ -932,7 +947,7 @@ educationalResourceDialog.addEventListener("close", () => {
 });
 window.addEventListener("message", event => {
   if (event.origin !== location.origin || event.source !== educationalResourceFrame.contentWindow) return;
-  if (event.data?.type === "educational-resource:close") closeParticulateResource();
+  if (event.data?.type === "educational-resource:close") closeEducationalResource();
 });
 
 function getPolicy(code) {
@@ -1280,17 +1295,17 @@ function updateDashboard(rawValues) {
       card.dataset.param = def.key;
       card.title = `Abrir recurso didáctico de ${def.label}`;
       card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
-      if (def.key === "pm25" || def.key === "pm10") {
+      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2") {
         card.addEventListener("click", event => {
           event.preventDefault();
-          openParticulateResource(def.key, card);
+          openEducationalResource(def.key, card);
         });
       }
       grid.appendChild(card);
     }
     card.querySelector("span").textContent = def.label;
-    card.href = def.key === "pm25" || def.key === "pm10"
-      ? particulateResourceUrl(def.key, rawValues)
+    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2"
+      ? educationalResourceUrl(def.key, rawValues)
       : `${def.resource}?value=${encodeURIComponent(value)}`;
     card.querySelector("strong").textContent = fmt(value, def.digits);
     card.querySelector("em").textContent = def.unit;
@@ -2747,7 +2762,7 @@ function debugApplyPoliciesForYear(codes, year = 1) {
 
 function createReportChart(seriesKeys, values) {
   const colors = { pm25: "#ed2f2f", pm10: "#ef8b00", co2: "#69777f", nox: "#175bc9", o3: "#08a89c", cov: "#8d49b6", temp: "#ed2f2f", exposure: "#2d983f", acceptance: "#175bc9" };
-  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "CO₂", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temperatura", exposure: "Exposición", acceptance: "Aceptación" };
+  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "Emisiones CO₂", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temperatura", exposure: "Exposición", acceptance: "Aceptación" };
   const w = 720;
   const h = 300;
   const plot = { left: 52, right: 16, top: 18, bottom: 68 };
@@ -2838,7 +2853,7 @@ function buildReportHtml() {
   const rows = [
     { key: "pm25", label: "PM2.5", start: initial.pm25, end: final.pm25, unit: "µg/m³", digits: 1 },
     { key: "pm10", label: "PM10", start: initial.pm10, end: final.pm10, unit: "µg/m³", digits: 1 },
-    { key: "co2", label: "CO₂", start: initial.co2, end: final.co2, unit: "ppm", digits: 0 },
+    { key: "co2", label: "Emisiones CO₂", start: initial.co2, end: final.co2, unit: "índice", digits: 1 },
     { key: "nox", label: "NOx", start: initial.nox, end: final.nox, unit: "ppb", digits: 0 },
     { key: "o3", label: "O₃", start: initial.o3, end: final.o3, unit: "ppb", digits: 1 },
     { key: "cov", label: "COV", start: initial.cov, end: final.cov, unit: "µg/m³", digits: 1 },
@@ -2870,6 +2885,7 @@ function buildReportHtml() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte final - Simulador de calidad de aire</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b8a5a'/%3E%3Cpath d='M12 44h40M18 44V24h10v20M34 44V16h12v28' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
     <style>
       :root{--navy:#082f3a;--ink:#102d38;--muted:#536b76;--line:#d7e3e8;--green:#239548;--green-soft:#eff9f2;--orange:#ef9300;--orange-soft:#fff8ec;--blue:#1764d4;--blue-soft:#f1f7ff}
       *{box-sizing:border-box}

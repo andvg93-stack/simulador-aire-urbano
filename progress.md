@@ -97,3 +97,23 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación visual: diálogo revisado en 1440×900 y 390×844, recurso completo en 1280×900 y vistas móviles segmentadas; no hay desbordamiento horizontal, recortes funcionales ni rótulos superpuestos.
 - Regresión: URLs heredadas de PM2.5/PM10 y recurso CO₂ siguen funcionando; cliente determinista ejecutado para ambos focos, preferencia de movimiento reducido respetada y cero errores de consola.
 - Pendientes conocidos: ninguno dentro del alcance del laboratorio de material particulado.
+
+## Laboratorio de CO₂
+
+- Solicitud activa: separar emisiones urbanas y concentración atmosférica, integrar el recurso sin perder el plan y reemplazar la escena estática por un laboratorio determinista.
+- Rama de trabajo: `codex/recurso-co2`.
+- Decisión de modelo: CO₂ pasa de una falsa concentración reducible de 496 ppm a un índice relativo de emisiones con base 100 y rango 65–115; los coeficientes de P1, P2, P3, P4, P5 y P9 no cambian.
+- Implementado: la tarjeta, las gráficas y el reporte principal identifican la métrica como `Emisiones CO₂` en índice relativo.
+- Implementado: el diálogo educativo se generalizó para CO₂ y material particulado, conservando estado, cierre interno, Escape y restauración de foco.
+- Implementado: laboratorio con vistas de fuentes y clima, actividad relativa, fuente destacada, seis medidas, resultados antes/después, referencia atmosférica fechada y animación determinista.
+- Compatibilidad: `?current=` recibe el índice actual y `?value=` normaliza enlaces heredados con la relación `value / 496 × 100`.
+- Verificación inicial: sintaxis JavaScript válida y auditoría de 370 combinaciones de políticas completada con 39 planes aceptables, sin alterar sus criterios.
+- Verificación funcional: a actividad 100, P1=90, P2=85, P3=95, P4=93, P5=97 y P9=95; los extremos 50/150 cambian densidad e índice sin alterar la referencia de 431 ppm.
+- Verificación determinista: la pausa conserva la fase, 600 ms de avance producen 0,1 de recorrido al reproducir y restablecer recupera vista, actividad, fuente, medida y fase iniciales.
+- Verificación de compatibilidad: `?value=496` produce 100, `?value=350` produce 70,56 y `?current=65` conserva 65 sin recorte silencioso.
+- Verificación integrada: P1 y sus 35 puntos se conservan al cerrar desde el recurso o con Escape; el foco vuelve a la tarjeta CO₂ y PM2.5/PM10 mantienen su diálogo y valores.
+- Verificación del reporte: el escenario P1+P2 termina en índice 75 y la tabla final muestra `Emisiones CO₂`, base 100, resultado 75, reducción 25% y unidad `índice`, sin ppm heredadas.
+- Verificación visual: fuentes y clima revisados en 1280×900; recurso y diálogo revisados en 390×844, sin desbordamiento horizontal, solapamientos ni recortes de controles.
+- Accesibilidad y estabilidad: movimiento reducido inicia en pausa, todos los controles son alcanzables por teclado, las moléculas permanecen dentro del `viewBox` y no hay errores de consola ni solicitudes 404.
+- Cliente determinista oficial ejecutado después de los ajustes finales; estado textual y captura coinciden.
+- Pendientes conocidos: ninguno dentro del alcance del laboratorio de CO₂.
