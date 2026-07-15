@@ -143,3 +143,16 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación integrada: con P1 seleccionado y 35 puntos usados, cierre interno, mensaje, Escape desde el iframe y botón externo conservan plan, presupuesto, año e historial y restauran el foco a NOx.
 - Verificación visual y accesible: vistas de fuentes y química revisadas en 1280×900 y 390×844, además del diálogo en ambos tamaños; sin desbordamiento, moléculas fuera del `viewBox`, errores de consola ni 404; pestañas operables con flechas.
 - Regresión final: PM2.5/PM10, CO₂ y O₃ cargan con el cliente determinista oficial; estados textuales y capturas permanecen coherentes.
+
+## Auditoría y plan del laboratorio de O₃
+
+- Rama de trabajo: `codex/recurso-o3`.
+- Alcance de esta iteración: auditoría funcional, contraste científico y plan; el recurso O₃ todavía no se modificó.
+- Auditoría Playwright: la interfaz responde y no desborda en 390×844, pero `?value=20.2` termina mostrando 35,2 ppb y el control no recorre coherentemente el intervalo 10–60 ppb.
+- Hallazgo funcional: `advanceTime(5000)` no cambia el SVG; la escena “En vivo” es estática y el recurso genera una solicitud 404 por falta de favicon.
+- Hallazgo crítico de integración: regresar desde O₃ recarga `index.html`; P1 y sus 35 puntos usados se pierden.
+- Hallazgo científico: la media ponderada fija de radiación, NOx y COV no coincide con `NoxModel.ozoneResponse`, no representa transporte y usa categorías arbitrarias de “formación”.
+- Decisión de plan: diferenciar el laboratorio O₃ del de NOx mediante dos vistas centradas en formación/transporte a sotavento y exposición/referencia de 8 horas.
+- Decisión de modelo: conservar O₃ en ppb, mostrar secundariamente µg/m³ a 25 °C y 1 atm y reutilizar exactamente los efectos compartidos de P1, P2, P3, P4, P6, P8 y P9.
+- Referencias verificadas: Colombia y OMS usan 100 µg/m³ en 8 horas; la OMS añade 60 µg/m³ para temporada pico, que se mostrará solo como contexto y no clasificará una observación individual.
+- El plan completo, sus controles, resultados esperados e interfaz de aceptación quedaron registrados en `CRITERIOS_LABS_EDUCATIVOS.md`.
