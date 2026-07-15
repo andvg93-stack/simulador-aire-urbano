@@ -122,3 +122,14 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación de la escala: 70=431 ppm, 100=496 ppm, P1=474,3, P2=463,5, P3/P9=485,2, P4=480,8 y P5=489,5 ppm; índices menores de 70 permanecen en 431 y mayores de 100 en 496.
 - Verificación de coherencia: el escenario P1+P2 termina en 442 ppm tanto en tarjeta como en reporte; la tabla y el resumen gráfico muestran una variación de −10,9% calculada sobre los valores visibles.
 - Verificación visual final: P2 muestra 496→464 ppm en escritorio y móvil, sin desbordamiento ni errores de consola.
+
+## Auditoría y plan del laboratorio de NOx
+
+- Rama de trabajo: `codex/recurso-nox`.
+- Se creó `CRITERIOS_LABS_EDUCATIVOS.md` como especificación reutilizable para objetivo, contenido, controles, integridad científica, integración, determinismo, accesibilidad y aceptación de los laboratorios restantes.
+- Auditoría Playwright: `?value=94` funciona y la vista móvil no desborda; el control entrega 15–125 ppb, `advanceTime(5000)` no cambia el SVG y falta favicon.
+- Hallazgo crítico: volver desde NOx recarga el simulador; P1 y sus 35 puntos usados se pierden.
+- Hallazgo científico: el recurso llama “emisión” a una concentración en ppb, no separa NOx de NO₂ y representa una respuesta siempre positiva hacia O₃ que no coincide con la lógica NOx–COV–meteorología del modelo.
+- Decisión de plan: conservar `nox` como variable interna, separar NOx precursor de NO₂ equivalente para exposición y comparar únicamente períodos compatibles.
+- Referencias verificadas: Colombia establece para NO₂ 200 µg/m³ en 1 hora y 60 µg/m³ anual, con meta anual de 40 µg/m³ desde 2030; OMS 2021 recomienda 10 µg/m³ anual y 25 µg/m³ en 24 horas.
+- Alcance de esta iteración: auditoría, criterios y plan documentados; la implementación del nuevo laboratorio NOx queda pendiente de autorización explícita.
