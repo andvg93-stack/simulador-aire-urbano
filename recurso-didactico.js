@@ -427,10 +427,325 @@
     }
   };
 
+  const particulateReferences = {
+    pm25: { label: "PM2.5", max: 80, min: 5, colombia24: 37, who24: 15, colombiaAnnual: 25, colombia2030: 15, whoAnnual: 5, color: palette.red },
+    pm10: { label: "PM10", max: 120, min: 10, colombia24: 75, who24: 45, colombiaAnnual: 50, colombia2030: 30, whoAnnual: 15, color: palette.orange }
+  };
+
+  function particulateStatus(type, value) {
+    const reference = particulateReferences[type];
+    if (value <= reference.who24) return { tone: "good", label: "Dentro de la guía OMS de 24 h" };
+    if (value <= reference.colombia24) return { tone: "warn", label: "Supera OMS; dentro del máximo colombiano de 24 h" };
+    return { tone: "bad", label: "Supera OMS y el máximo colombiano de 24 h" };
+  }
+
+  function cubicPoint(points, t) {
+    const mt = 1 - t;
+    return {
+      x: (mt ** 3 * points[0][0]) + (3 * mt * mt * t * points[1][0]) + (3 * mt * t * t * points[2][0]) + (t ** 3 * points[3][0]),
+      y: (mt ** 3 * points[0][1]) + (3 * mt * mt * t * points[1][1]) + (3 * mt * t * t * points[2][1]) + (t ** 3 * points[3][1])
+    };
+  }
+
+  function particulatePathPoint(type, progress) {
+    const fine = type === "pm25";
+    const split = fine ? 0.66 : 0.82;
+    if (progress <= split) {
+      const t = progress / split;
+      return cubicPoint([[155, 172], [325, fine ? 62 : 116], [515, fine ? 90 : 132], [605, 121]], t);
+    }
+    const t = (progress - split) / (1 - split);
+    return fine
+      ? cubicPoint([[605, 121], [659, 151], [661, 238], [629, 304]], t)
+      : cubicPoint([[605, 121], [631, 137], [644, 166], [645, 190]], t);
+  }
+
+  function particulateSourceMarkup(source) {
+    const traffic = `
+      <g aria-label="Fuente de tráfico y combustión">
+        <rect x="20" y="294" width="185" height="54" rx="12" fill="#3d4d56"/>
+        <line x1="28" y1="326" x2="198" y2="326" stroke="#f6df76" stroke-width="3" stroke-dasharray="18 14"/>
+        ${car(42, 279, palette.red, .88)}${car(118, 298, palette.blue, .74)}
+        <path d="M93 286c27-23 46-20 68-34" fill="none" stroke="#be3a34" stroke-width="10" stroke-linecap="round" opacity=".2"/>
+        <text class="source-own-label" x="112" y="371" text-anchor="middle" font-size="13" font-weight="800" fill="${palette.ink}">TRÁFICO Y COMBUSTIÓN</text>
+      </g>`;
+    const dust = `
+      <g aria-label="Fuente de obras y polvo">
+        <path d="M24 335 76 267l52 68z" fill="#b68b63"/><path d="M91 335 142 286l48 49z" fill="#987150"/>
+        <rect x="34" y="249" width="16" height="87" fill="#d9822b"/><path d="m29 250 13-27 13 27z" fill="#f0c75e"/>
+        <rect x="154" y="252" width="15" height="84" fill="#d9822b"/><path d="m149 253 13-27 13 27z" fill="#f0c75e"/>
+        ${deterministicDots(10, { x: 22, y: 205, width: 165, height: 74, color: palette.orange, minRadius: 5, maxRadius: 10, opacity: .25 })}
+        <text class="source-own-label" x="108" y="371" text-anchor="middle" font-size="13" font-weight="800" fill="${palette.ink}">OBRAS Y POLVO</text>
+      </g>`;
+    if (source === "traffic") return traffic;
+    if (source === "dust") return dust;
+    return `<g class="mixed-source"><g transform="translate(0 18) scale(.72)">${traffic}</g><g transform="translate(82 38) scale(.68)">${dust}</g></g><text x="108" y="371" text-anchor="middle" font-size="13" font-weight="800" fill="${palette.ink}">FUENTE MIXTA</text>`;
+  }
+
+  function particulateScene(state, effective) {
+    const visibleTypes = state.focus === "compare" ? ["pm10", "pm25"] : [state.focus];
+    const particles = [];
+    const deposits = [];
+    const counts = { pm25: 0, pm10: 0 };
+    const deposited = { pm25: 0, pm10: 0 };
+
+    visibleTypes.forEach(type => {
+      const reference = particulateReferences[type];
+      const level = ratio(effective[type], reference.min, reference.max);
+      const count = Math.round(7 + level * 22);
+      const depositCount = Math.round(2 + level * 8);
+      counts[type] = count;
+      deposited[type] = depositCount;
+      for (let index = 0; index < count; index += 1) {
+        const progress = (state.phase + (index / count) + (type === "pm25" ? .06 : .31)) % 1;
+        const point = particulatePathPoint(type, progress);
+        const radiusValue = type === "pm25" ? 2.7 : 6.2;
+        particles.push(`<circle class="moving-particle ${type}" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${radiusValue}" fill="${reference.color}" opacity="${type === "pm25" ? .85 : .76}"/>`);
+      }
+      for (let index = 0; index < depositCount; index += 1) {
+        const x = type === "pm25" ? 601 + ((index * 19) % 77) : 630 + ((index * 9) % 31);
+        const y = type === "pm25" ? 252 + ((index * 27) % 81) : 148 + ((index * 13) % 53);
+        deposits.push(`<circle class="deposited-particle ${type}" cx="${x}" cy="${y}" r="${type === "pm25" ? 2.8 : 5.8}" fill="${reference.color}" opacity=".86"/>`);
+      }
+    });
+
+    const fineActive = visibleTypes.includes("pm25");
+    const coarseActive = visibleTypes.includes("pm10");
+    const svg = svgFrame("Comparación animada de PM2.5 y PM10 desde una fuente urbana hasta diferentes zonas del sistema respiratorio", `
+      <rect width="720" height="400" fill="url(#sky)"/>
+      <rect y="346" width="720" height="54" fill="#e9efe9"/>
+      ${particulateSourceMarkup(state.source)}
+      <path d="M155 172 C325 62 515 90 605 121 C659 151 661 238 629 304" fill="none" stroke="${palette.red}" stroke-width="3" stroke-dasharray="8 10" opacity="${fineActive ? .38 : .08}"/>
+      <path d="M155 172 C325 116 515 132 605 121 C631 137 644 166 645 190" fill="none" stroke="${palette.orange}" stroke-width="4" stroke-dasharray="12 12" opacity="${coarseActive ? .42 : .08}"/>
+      ${particles.join("")}
+      <g aria-label="Sistema respiratorio">
+        <circle cx="637" cy="75" r="43" fill="#e2b39e"/>
+        <path d="M602 114c-27 37-38 99-35 222h126c3-123-8-185-36-222" fill="#f2d5c8"/>
+        <path d="M605 118c30 3 40 25 40 53v49m0-28-31 28m31-28 31 28" fill="none" stroke="#8b5f61" stroke-width="9" stroke-linecap="round"/>
+        <path d="M639 230c-38-21-57 3-57 48 0 48 25 72 58 55z" fill="#f2a7a2" stroke="#a84d50" stroke-width="3"/>
+        <path d="M651 230c38-21 57 3 57 48 0 48-25 72-58 55z" fill="#f2a7a2" stroke="#a84d50" stroke-width="3"/>
+        ${deposits.join("")}
+      </g>
+      <g font-size="11" font-weight="800" fill="${palette.ink}">
+        <path d="M629 152h-72" stroke="#7f9099"/><text x="552" y="156" text-anchor="end">Nariz y garganta · PM10</text>
+        <path d="M620 278h-63" stroke="#7f9099"/><text x="552" y="282" text-anchor="end">Alvéolos · PM2.5</text>
+      </g>
+    `, "#eef6f3");
+    return { svg, counts, deposited };
+  }
+
+  function renderParticulateLab(key, root) {
+    const params = new URLSearchParams(location.search);
+    const validFocus = ["compare", "pm25", "pm10"];
+    const focusFromQuery = params.get("focus");
+    const initialFocus = validFocus.includes(focusFromQuery) ? focusFromQuery : key;
+    const numberParam = name => params.has(name) ? Number(params.get(name)) : Number.NaN;
+    const legacyValue = numberParam("value");
+    const queryPm25 = numberParam("pm25");
+    const queryPm10 = numberParam("pm10");
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const embedded = params.get("embedded") === "1";
+    const initial = {
+      pm25: Number.isFinite(queryPm25) ? clamp(queryPm25, 5, 80) : (key === "pm25" && Number.isFinite(legacyValue) ? clamp(legacyValue, 5, 80) : 35),
+      pm10: Number.isFinite(queryPm10) ? clamp(queryPm10, 10, 120) : (key === "pm10" && Number.isFinite(legacyValue) ? clamp(legacyValue, 10, 120) : 50)
+    };
+    const state = {
+      focus: initialFocus,
+      pm25: initial.pm25,
+      pm10: initial.pm10,
+      source: initialFocus === "pm25" ? "traffic" : initialFocus === "pm10" ? "dust" : "mixed",
+      mitigation: false,
+      playing: !reducedMotion,
+      phase: 0
+    };
+    let lastScene = { counts: { pm25: 0, pm10: 0 }, deposited: { pm25: 0, pm10: 0 } };
+
+    document.title = "Laboratorio comparativo: PM2.5 y PM10";
+    document.documentElement.style.setProperty("--accent", palette.red);
+    document.documentElement.style.setProperty("--scene-tint", "#f8efeb");
+    document.body.classList.toggle("embedded-resource", embedded);
+    root.className = "resource-shell particulate-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back particulate-close" id="particulate-close" type="button">${embedded ? "← Cerrar laboratorio" : "← Volver al simulador"}</button><span class="resource-tag">Laboratorio comparativo</span></nav>
+      <header class="resource-header particulate-header"><div><p class="eyebrow">Material particulado respirable</p><h1>PM2.5 y PM10</h1><p class="lead">Compara cómo la concentración cambia la cantidad de partículas y cómo el tamaño determina hasta dónde pueden penetrar. Los valores se interpretan como un escenario didáctico equivalente a un promedio de 24 horas.</p></div><div class="header-mark particulate-mark" aria-hidden="true"><span>2.5</span><span>10</span></div></header>
+      <section class="particulate-layout" aria-label="Laboratorio comparativo de material particulado">
+        <article class="card scene-card particulate-scene-card">
+          <div class="card-head"><div><h2>Del ambiente al sistema respiratorio</h2><p>Las rutas son representativas: muestran dónde puede depositarse cada tamaño.</p></div><span class="live-badge" id="animation-badge"></span></div>
+          <div class="scene particulate-scene" id="particulate-scene"></div>
+          <div class="scene-legend"><span class="legend-item"><i class="legend-dot" style="--dot:${palette.red}"></i>PM2.5 · partícula fina</span><span class="legend-item"><i class="legend-dot" style="--dot:${palette.orange}"></i>PM10 · partícula gruesa</span><span class="legend-item"><i class="legend-line"></i>Trayectoria representativa</span></div>
+          <div class="particle-scale" aria-label="Comparación real de diámetros">
+            <div class="scale-title"><strong>Escala real de diámetros</strong><span>70 : 10 : 2,5</span></div>
+            <div class="scale-row exact-scale"><span class="size-circle hair" aria-label="Cabello humano 70 micrómetros">70</span><span class="size-circle pm10-size" aria-label="PM10 10 micrómetros">10</span><span class="size-circle pm25-size" aria-label="PM2.5 2,5 micrómetros"></span></div>
+            <div class="scale-labels"><span>Cabello · 70 µm</span><span>PM10 · 10 µm</span><span>PM2.5 · 2,5 µm</span></div>
+            <div class="zoom-scale"><span>Ampliación ×4</span><i class="zoom-pm10"></i><b>PM10</b><i class="zoom-pm25"></i><b>PM2.5</b></div>
+          </div>
+        </article>
+        <aside class="card control-card particulate-controls">
+          <div><h2>Experimenta</h2><p class="control-intro">El recurso no agrega políticas al plan; solo demuestra sus efectos.</p></div>
+          <div class="mode-tabs" role="tablist" aria-label="Modo de comparación">
+            <button type="button" data-focus="compare" role="tab">Comparar</button><button type="button" data-focus="pm25" role="tab">PM2.5</button><button type="button" data-focus="pm10" role="tab">PM10</button>
+          </div>
+          <div class="particulate-sliders">
+            <div class="control-group" data-control-type="pm25"><label class="control-label" for="control-pm25"><span>Concentración de PM2.5</span><span class="control-readout" id="readout-pm25"></span></label><input id="control-pm25" type="range" min="5" max="80" step="0.1"><div class="range-labels"><span>5</span><span>80 µg/m³</span></div></div>
+            <div class="control-group" data-control-type="pm10"><label class="control-label" for="control-pm10"><span>Concentración de PM10</span><span class="control-readout pm10-readout" id="readout-pm10"></span></label><input id="control-pm10" type="range" min="10" max="120" step="0.1"><div class="range-labels"><span>10</span><span>120 µg/m³</span></div></div>
+          </div>
+          <div class="control-group"><label class="control-label" for="control-source"><span>Fuente dominante</span></label><select id="control-source" class="select-control"><option value="traffic">Tráfico y combustión</option><option value="dust">Obras y polvo</option><option value="mixed">Fuente mixta</option></select></div>
+          <label class="mitigation-toggle" for="control-mitigation"><input id="control-mitigation" type="checkbox"><span><strong id="mitigation-title"></strong><small id="mitigation-detail"></small></span></label>
+          <div class="playback-controls"><button type="button" id="play-toggle"></button><button type="button" id="reset-lab">Restablecer</button></div>
+          <div class="particulate-results" id="particulate-results" aria-live="polite"></div>
+          <p class="didactic-note">La concentración controla la densidad de puntos. El tamaño y la zona de depósito permanecen propios de PM2.5 o PM10.</p>
+        </aside>
+      </section>
+      <section class="particulate-info-grid" aria-label="Claves de interpretación">
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">↗</span><h2>Fuentes</h2><p><b>PM2.5:</b> combustión vehicular e industrial y formación secundaria. <b>PM10:</b> polvo resuspendido, obras y desgaste.</p></article>
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">◎</span><h2>Depósito</h2><p>PM10 tiende a quedar en vías superiores. PM2.5 puede alcanzar bronquios y alvéolos; la ilustración no representa una dosis clínica.</p></article>
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">✓</span><h2>Acciones</h2><p>P1 reduce especialmente emisiones de combustión. P7 actúa con mayor fuerza sobre PM10 proveniente de obras y polvo.</p></article>
+      </section>
+      <section class="card standards-card"><div><p class="eyebrow">Referencias con período explícito</p><h2>Colombia y OMS</h2></div><div class="standards-grid"><p><b>Colombia actual · anual:</b> PM2.5 25 y PM10 50 µg/m³.<br><b>Meta Colombia 2030 · anual:</b> PM2.5 15 y PM10 30 µg/m³.</p><p><b>OMS 2021 · anual:</b> PM2.5 5 y PM10 15 µg/m³.<br><b>OMS 2021 · 24 h:</b> PM2.5 15 y PM10 45 µg/m³.</p></div><div class="standards-links"><a href="https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf" target="_blank" rel="noopener">Resolución 2254 de 2017</a><a href="https://www.who.int/teams/environment-climate-change-and-health/air-quality-and-health/health-impacts/types-of-pollutants" target="_blank" rel="noopener">Guías OMS 2021</a></div></section>`;
+
+    const elements = {
+      scene: document.getElementById("particulate-scene"),
+      results: document.getElementById("particulate-results"),
+      pm25: document.getElementById("control-pm25"),
+      pm10: document.getElementById("control-pm10"),
+      source: document.getElementById("control-source"),
+      mitigation: document.getElementById("control-mitigation"),
+      play: document.getElementById("play-toggle"),
+      badge: document.getElementById("animation-badge")
+    };
+    elements.pm25.value = state.pm25;
+    elements.pm10.value = state.pm10;
+    elements.source.value = state.source;
+
+    function mitigationForSource() {
+      if (!state.mitigation) return { key: "none", label: "Sin medida", pm25: 1, pm10: 1 };
+      if (state.source === "traffic") return { key: "p1", label: "P1 · Zona de bajas emisiones", pm25: .82, pm10: .88 };
+      if (state.source === "dust") return { key: "p7", label: "P7 · Control de obras y polvo", pm25: .98, pm10: .78 };
+      return { key: "p1+p7", label: "P1 + P7 · Control combinado", pm25: .80, pm10: .66 };
+    }
+
+    function effectiveValues() {
+      const measure = mitigationForSource();
+      return { pm25: state.pm25 * measure.pm25, pm10: state.pm10 * measure.pm10 };
+    }
+
+    function referenceMarkup(type, effective) {
+      const reference = particulateReferences[type];
+      const status = particulateStatus(type, effective);
+      const original = state[type];
+      const reduction = original ? Math.max(0, (1 - effective / original) * 100) : 0;
+      const marker = value => clamp(value / reference.max * 100, 0, 100);
+      return `<article class="result-panel ${status.tone}"><div class="result-heading"><span>${reference.label}</span><strong>${fmt(effective, 1)} <small>µg/m³</small></strong></div><p>Original: ${fmt(original, 1)} · Reducción: ${fmt(reduction, 0)}%</p><div class="reference-track" aria-label="Comparación de ${reference.label} con referencias de 24 horas"><i class="who-marker" style="left:${marker(reference.who24)}%"><b>OMS ${reference.who24}</b></i><i class="colombia-marker" style="left:${marker(reference.colombia24)}%"><b>COL ${reference.colombia24}</b></i><span class="value-marker" style="left:${marker(effective)}%"></span></div><span class="result-status">${status.label}</span></article>`;
+    }
+
+    function renderScene() {
+      const effective = effectiveValues();
+      lastScene = particulateScene(state, effective);
+      elements.scene.innerHTML = lastScene.svg;
+    }
+
+    function render() {
+      const effective = effectiveValues();
+      const measure = mitigationForSource();
+      document.querySelectorAll("[data-focus]").forEach(button => {
+        const active = button.dataset.focus === state.focus;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      document.querySelectorAll("[data-control-type]").forEach(group => {
+        group.hidden = state.focus !== "compare" && group.dataset.controlType !== state.focus;
+      });
+      document.getElementById("readout-pm25").textContent = `${fmt(state.pm25, 1)} µg/m³`;
+      document.getElementById("readout-pm10").textContent = `${fmt(state.pm10, 1)} µg/m³`;
+      elements.source.value = state.source;
+      elements.mitigation.checked = state.mitigation;
+      document.getElementById("mitigation-title").textContent = state.source === "traffic" ? "Aplicar P1 · Zona de bajas emisiones" : state.source === "dust" ? "Aplicar P7 · Control de obras y polvo" : "Aplicar P1 + P7";
+      document.getElementById("mitigation-detail").textContent = state.source === "traffic" ? "−18% PM2.5 · −12% PM10" : state.source === "dust" ? "−2% PM2.5 · −22% PM10" : "−20% PM2.5 · −34% PM10";
+      elements.play.textContent = state.playing ? "Pausar animación" : "Reproducir animación";
+      elements.badge.textContent = state.playing ? "En movimiento" : "En pausa";
+      elements.badge.classList.toggle("paused", !state.playing);
+      const resultTypes = state.focus === "compare" ? ["pm25", "pm10"] : [state.focus];
+      elements.results.innerHTML = `<div class="measure-name">${measure.label}</div>${resultTypes.map(type => referenceMarkup(type, effective[type])).join("")}`;
+      renderScene();
+    }
+
+    document.querySelectorAll("[data-focus]").forEach(button => button.addEventListener("click", () => {
+      state.focus = button.dataset.focus;
+      state.source = state.focus === "pm25" ? "traffic" : state.focus === "pm10" ? "dust" : "mixed";
+      state.mitigation = false;
+      render();
+    }));
+    elements.pm25.addEventListener("input", () => { state.pm25 = Number(elements.pm25.value); render(); });
+    elements.pm10.addEventListener("input", () => { state.pm10 = Number(elements.pm10.value); render(); });
+    elements.source.addEventListener("change", () => { state.source = elements.source.value; state.mitigation = false; render(); });
+    elements.mitigation.addEventListener("change", () => { state.mitigation = elements.mitigation.checked; render(); });
+    elements.play.addEventListener("click", () => { state.playing = !state.playing; render(); });
+    document.getElementById("reset-lab").addEventListener("click", () => {
+      Object.assign(state, { focus: initialFocus, pm25: initial.pm25, pm10: initial.pm10, source: initialFocus === "pm25" ? "traffic" : initialFocus === "pm10" ? "dust" : "mixed", mitigation: false, playing: !reducedMotion, phase: 0 });
+      elements.pm25.value = state.pm25;
+      elements.pm10.value = state.pm10;
+      render();
+    });
+    document.getElementById("particulate-close").addEventListener("click", () => {
+      if (embedded && window.parent !== window) {
+        window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      } else if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) {
+        history.back();
+      } else {
+        location.href = "index.html";
+      }
+    });
+
+    function renderResourceToText() {
+      const measure = mitigationForSource();
+      const effective = effectiveValues();
+      return JSON.stringify({
+        resource: "particulate-matter",
+        focus: state.focus,
+        coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
+        concentrations: { pm25: Number(state.pm25.toFixed(1)), pm10: Number(state.pm10.toFixed(1)) },
+        effective: { pm25: Number(effective.pm25.toFixed(2)), pm10: Number(effective.pm10.toFixed(2)) },
+        source: state.source,
+        mitigation: measure.key,
+        animation: { playing: state.playing, phase: Number(state.phase.toFixed(3)) },
+        particles: { airborne: lastScene.counts, deposited: lastScene.deposited },
+        deposition: { pm10: "nariz, garganta y vías superiores", pm25: "bronquios y alvéolos" },
+        standards24h: { pm25: particulateStatus("pm25", effective.pm25).label, pm10: particulateStatus("pm10", effective.pm10).label }
+      });
+    }
+
+    window.RESOURCE = { kind: "particulate-matter", focus: initialFocus };
+    window.render_resource_to_text = renderResourceToText;
+    window.render_game_to_text = renderResourceToText;
+    window.advanceTime = ms => {
+      if (state.playing) state.phase = (state.phase + Math.max(0, Number(ms) || 0) / 6000) % 1;
+      renderScene();
+      return renderResourceToText();
+    };
+
+    let lastFrame = performance.now();
+    function animateParticulate(now) {
+      const delta = Math.min(50, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      if (state.playing) {
+        state.phase = (state.phase + delta / 6000) % 1;
+        renderScene();
+      }
+      requestAnimationFrame(animateParticulate);
+    }
+    render();
+    if (!window.__vt_pending) requestAnimationFrame(animateParticulate);
+  }
+
   const key = document.body.dataset.resource;
   const config = resources[key];
   const root = document.getElementById("resource-app");
   if (!config || !root) return;
+
+  if (key === "pm25" || key === "pm10") {
+    renderParticulateLab(key, root);
+    return;
+  }
 
   const state = {};
   const controls = [config.primary, ...(config.secondary || [])];

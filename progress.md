@@ -80,3 +80,20 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Generado con P1, P2 y P3: presupuesto 95/100, tres políticas y resultado parcialmente aceptable.
 - Artefactos: PDF A4 de dos páginas, vista completa en pantalla y previsualizaciones PNG de cada página en `output/pdf/`.
 - Verificación: datos equivalentes a la referencia, dos páginas A4 confirmadas y revisión visual sin recortes, superposiciones ni errores de consola.
+
+## Laboratorio comparativo de material particulado
+
+- Solicitud activa: rediseñar PM2.5 y PM10 como un único laboratorio comparativo integrado al simulador, con animación respiratoria, referencias Colombia/OMS y medidas demostrativas.
+- Auditoría previa: los valores y sliders funcionaban, pero las partículas respiratorias quedaban fuera del SVG, la escena no se animaba, las categorías eran relativas y volver al simulador eliminaba el plan en curso.
+- Rama de trabajo: `codex/recurso-material-particulado`.
+- Criterios: conservar URLs y `?value=`, aceptar `focus`, `pm25`, `pm10` y `embedded`, preservar estado del simulador, usar efectos P1/P7 y verificar escritorio/móvil con Playwright.
+- Implementado: laboratorio PM compartido con comparación de tamaño, trayectorias respiratorias, referencias Colombia/OMS, fuentes, medidas P1/P7, reproducción, pausa, restablecimiento y estado determinista.
+- Implementado: diálogo con iframe desde las tarjetas PM que conserva el estado del simulador y restaura el foco al cerrar.
+- Ajuste de prueba: el bucle automático se desactiva cuando el cliente instala tiempo virtual; en ese modo la escena avanza solo mediante `advanceTime(ms)`.
+- Verificación funcional parcial: diálogo conserva P1 y 35 puntos, restaura foco, cierra con control interno o Escape; referencias OMS/Colombia, P7, P1+P7, pausa, avance y restablecimiento entregan los estados esperados sin errores de consola.
+- Hallazgo corregido: los parámetros ausentes ya no se convierten en cero, por lo que `?value=` vuelve a inicializar correctamente la ruta heredada.
+- Verificación funcional final: extremos 5/80 y 10/120, umbrales 15/37/45/75, P1, P7 y P1+P7 coinciden con el modelo; pausa conserva la fase y 600 ms de avance producen 0,1 de recorrido.
+- Verificación geométrica: todas las partículas quedan dentro del `viewBox`; los depósitos PM2.5 se ubican más profundos que PM10 y la comparación real mantiene la razón 70:10:2,5.
+- Verificación visual: diálogo revisado en 1440×900 y 390×844, recurso completo en 1280×900 y vistas móviles segmentadas; no hay desbordamiento horizontal, recortes funcionales ni rótulos superpuestos.
+- Regresión: URLs heredadas de PM2.5/PM10 y recurso CO₂ siguen funcionando; cliente determinista ejecutado para ambos focos, preferencia de movimiento reducido respetada y cero errores de consola.
+- Pendientes conocidos: ninguno dentro del alcance del laboratorio de material particulado.
