@@ -179,3 +179,16 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Referencias verificadas: Minambiente identifica fuentes, exposición directa, formación de O₃/aerosol secundario y control prioritario en la fuente; la Resolución 2254 y las guías OMS 2021 no fijan un máximo para COV agregados.
 - Decisión de plan: conservar µg/m³ como concentración equivalente didáctica de COV reactivos, sin semáforo sanitario, y separar fuente/control de destino/efectos.
 - El plan completo, sus controles, resultados de política, integración y aceptación quedaron registrados en `CRITERIOS_LABS_EDUCATIVOS.md`.
+- Implementación iniciada: P5 y `evaluateCovExperiment()` se incorporaron al modelo compartido; `index.html` consume ahora el mismo coeficiente de COV para P5.
+- Integración inicial: la tarjeta COV abre el diálogo educativo con `current`, conserva `value` para enlaces heredados y la página especializada carga modelo, favicon y recursos versionados.
+- Implementación inicial: COV dispone de vistas de fuentes/control y destino/efectos, concentración 5–50 µg/m³, cuatro perfiles, medidas complementarias, P8, resultados antes/después y respuesta secundaria de O₃.
+- Implementación inicial: la escena representa mezcla equivalente, exposición cercana, O₃ y aerosol orgánico secundario con una fase determinista; no asigna un umbral sanitario agregado.
+- Verificación funcional final: sin parámetros, `current`, `value` y su precedencia conservan 33,9 µg/m³; los extremos 5/50 cambian valor y densidad sin producir 70 µg/m³ ni categorías sanitarias.
+- Verificación de políticas: P1, P2, P3, P4, P5, P6, P8 y P9, además de todas las combinaciones previstas con P8, coinciden con `evaluateCovExperiment()`; P8 produce 22,035 µg/m³.
+- Verificación química: P1/P2 muestran O₃ +8 %, P6 −9 %, P8 y P1+P8 −12 %, y P6+P8 −21 %, usando `ozoneResponse`.
+- Verificación determinista: 600 ms avanzan 0,1 de fase al reproducir; pausa conserva el fotograma y restablecer recupera 33,9 µg/m³, fuente mixta, sin medidas, vista inicial y fase cero; movimiento reducido inicia en pausa.
+- Verificación integrada: con P8 y 20 puntos usados, cierre interno, Escape, botón externo y mensaje conservan política, presupuesto, año e historial y restauran el foco a COV.
+- Verificación visual y accesible: fuentes/control y destino/efectos revisados en 1280×900 y 390×844; pestañas operables con flechas, sin entidades fuera del `viewBox`, desbordamiento, errores de consola ni solicitudes fallidas.
+- Verificación de reporte: la tabla conserva COV en µg/m³ y añade una nota visible que define la mezcla equivalente y descarta una clasificación sanitaria agregada.
+- Regresión final: el cliente determinista oficial confirmó PM2.5, CO₂, NOx, O₃, COV y el recurso genérico de temperatura; la auditoría mantiene 370 combinaciones y 39 planes aceptables.
+- Pendientes conocidos: ninguno dentro del alcance del laboratorio de COV.

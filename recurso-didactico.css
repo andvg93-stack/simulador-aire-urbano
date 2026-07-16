@@ -924,3 +924,110 @@ input[type="range"] {
   .o3-standards-grid { grid-template-columns: 1fr; }
   .o3-stratosphere-note, .o3-standards-card .standards-links { grid-column: 1; }
 }
+
+/* Laboratorio de compuestos orgánicos volátiles */
+.cov-header { align-items: center; }
+.cov-mark { color: #fff; background: #7c4d9e; border-color: #7c4d9e; font-size: 26px; }
+
+.cov-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(355px, .8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.cov-scene-card { overflow: hidden; }
+.cov-view-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: #f3edf6;
+}
+
+.cov-view-tabs button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  color: #704985;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cov-view-tabs button.active { color: #fff; background: #7c4d9e; box-shadow: 0 5px 14px rgba(124, 77, 158, .25); }
+.cov-scene, .cov-scene svg { min-height: 400px; }
+.cov-lab-molecule text, .cov-product text { pointer-events: none; }
+
+.cov-context-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  border-top: 1px solid var(--line);
+  background: var(--line);
+}
+
+.cov-context-grid article { display: grid; gap: 5px; padding: 16px 18px; background: #fff; }
+.cov-context-grid span { color: #704985; font-size: 10px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.cov-context-grid strong { color: #17202a; font-size: 24px; }
+.cov-context-grid strong small { color: #6e6077; font-size: 11px; }
+.cov-context-grid article > small { color: #716f77; font-size: 11px; line-height: 1.4; }
+
+.cov-controls { gap: 15px; }
+.cov-source-note { color: #716f77; font-size: 11px; line-height: 1.45; }
+.cov-control-toggle input { accent-color: #7c4d9e; }
+.cov-control-toggle strong { color: #68427d; }
+.cov-controls .playback-controls button:first-child { border-color: #66417a; background: #704985; }
+.cov-results { display: grid; gap: 10px; }
+.cov-result-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+.cov-result-pair article { display: grid; align-content: center; gap: 3px; min-width: 0; padding: 11px; border: 1px solid #dfd2e6; border-radius: 12px; background: #fbf8fc; }
+.cov-result-pair article > span { color: #76687e; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.cov-result-pair article > strong { color: #17202a; font-size: 20px; white-space: nowrap; }
+.cov-result-pair > i { align-self: center; color: #7c4d9e; font-size: 21px; font-style: normal; }
+.cov-reduction { font-size: 12px; }
+.cov-reduction.decrease { color: #16714a; }
+.cov-reduction.stable { color: #536773; }
+.cov-difference { color: #6e6077; font-size: 10px; }
+
+.cov-ozone-result { display: grid; gap: 4px; padding: 12px; border-radius: 12px; background: #f7f2e8; }
+.cov-ozone-result > span { color: #78663e; font-size: 9px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.cov-ozone-result > strong { font-size: 17px; }
+.cov-ozone-result > strong.increase { color: #ac332f; }
+.cov-ozone-result > strong.decrease { color: #16714a; }
+.cov-ozone-result > strong.stable { color: #536773; }
+.cov-ozone-result > small { color: #6d6b61; font-size: 10px; line-height: 1.4; }
+.cov-method-note { margin: 0; padding: 11px; border: 1px solid #d6e2e5; border-radius: 11px; color: #536773; background: #edf5f7; font-size: 10px; line-height: 1.45; }
+
+.cov-context-card {
+  display: grid;
+  grid-template-columns: minmax(240px, .8fr) minmax(380px, 1.2fr);
+  gap: 18px 28px;
+  align-items: start;
+  margin-top: 18px;
+  padding: 21px;
+}
+
+.cov-context-card h2 { margin: 0; }
+.cov-context-card p:not(.eyebrow) { margin: 8px 0 0; color: #5f6f7a; font-size: 12px; line-height: 1.55; }
+.cov-context-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cov-context-facts article { display: grid; gap: 6px; padding: 14px; border: 1px solid #dfd2e6; border-radius: 12px; background: #fbf8fc; }
+.cov-context-facts strong { color: #68427d; font-size: 13px; }
+.cov-context-facts span { color: #686f76; font-size: 11px; line-height: 1.45; }
+.cov-context-card .standards-links { grid-column: 1 / -1; }
+
+@media (max-width: 980px) {
+  .cov-layout { grid-template-columns: 1fr; }
+  .cov-controls { min-height: auto; }
+}
+
+@media (max-width: 680px) {
+  .cov-mark { display: none; }
+  .cov-scene, .cov-scene svg { min-height: 260px; }
+  .cov-context-grid { grid-template-columns: 1fr; }
+  .cov-result-pair article { padding: 9px; }
+  .cov-result-pair article > strong { font-size: 17px; }
+  .cov-context-card { grid-template-columns: 1fr; padding: 17px; }
+  .cov-context-facts { grid-template-columns: 1fr; }
+  .cov-context-card .standards-links { grid-column: 1; }
+}

@@ -15,6 +15,7 @@
     P2: Object.freeze({ nox: -0.35, cov: -0.04, temp: 0, wind: 0 }),
     P3: Object.freeze({ nox: -0.10, cov: -0.04, temp: 0, wind: 0 }),
     P4: Object.freeze({ nox: -0.10, cov: -0.04, temp: -0.2, wind: 0 }),
+    P5: Object.freeze({ nox: 0, cov: -0.02, temp: -1.1, wind: 0 }),
     P6: Object.freeze({ nox: -0.08, cov: -0.06, temp: -0.4, wind: 0.18 }),
     P8: Object.freeze({ nox: 0, cov: -0.35, temp: 0, wind: 0 }),
     P9: Object.freeze({ nox: -0.08, cov: -0.03, temp: 0, wind: 0 })
@@ -136,6 +137,38 @@
     };
   }
 
+  function evaluateCovExperiment({ covUgM3 = BASELINE.cov, measure = "none", covControl = false } = {}) {
+    const reference = { ...BASELINE, cov: clamp(Number(covUgM3), 5, 50) };
+    const primary = policyEffects(measure);
+    const p8 = covControl ? policyEffects("P8") : policyEffects("none");
+    const effects = {
+      nox: primary.nox + p8.nox,
+      cov: primary.cov + p8.cov,
+      temp: primary.temp + p8.temp,
+      wind: primary.wind + p8.wind
+    };
+    const values = {
+      nox: reference.nox * (1 + effects.nox),
+      cov: reference.cov * (1 + effects.cov),
+      temp: reference.temp + effects.temp,
+      wind: reference.wind * (1 + effects.wind)
+    };
+    const ozone = ozoneResponse(values, reference);
+    return {
+      reference,
+      values,
+      effects,
+      covBefore: reference.cov,
+      covAfter: values.cov,
+      difference: values.cov - reference.cov,
+      reductionPercent: Math.max(0, -effects.cov * 100),
+      ozoneBefore: reference.o3,
+      ozoneAfter: ozone.value,
+      ozoneChangePercent: ozone.changePercent,
+      ozoneFactors: ozone.factors
+    };
+  }
+
   global.NoxModel = Object.freeze({
     baseline: BASELINE,
     policyEffects,
@@ -147,6 +180,7 @@
     ozoneResponse,
     evaluateExperiment,
     evaluateOzoneExperiment,
+    evaluateCovExperiment,
     colombiaOneHourUgM3: 200,
     ozoneEightHourUgM3: 100,
     ozonePeakSeasonUgM3: 60

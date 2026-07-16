@@ -1553,6 +1553,280 @@
     if (!window.__vt_pending) requestAnimationFrame(animateOzone);
   }
 
+  function renderCovLab(root) {
+    const model = window.NoxModel;
+    if (!model) throw new Error("NoxModel no está disponible");
+
+    const params = new URLSearchParams(location.search);
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const embedded = params.get("embedded") === "1";
+    const currentParam = Number(params.get("current"));
+    const legacyParam = Number(params.get("value"));
+    const hasCurrent = params.has("current") && Number.isFinite(currentParam);
+    const hasLegacy = params.has("value") && Number.isFinite(legacyParam);
+    const currentCov = clamp(hasCurrent ? currentParam : hasLegacy ? legacyParam : model.baseline.cov, 0, 100);
+    const initialExperiment = hasCurrent ? model.baseline.cov : hasLegacy ? clamp(legacyParam, 5, 50) : model.baseline.cov;
+    const state = {
+      view: params.get("view") === "fate" ? "fate" : "sources",
+      concentration: initialExperiment,
+      source: "mixed",
+      measure: "none",
+      covControl: false,
+      playing: !reducedMotion,
+      phase: 0
+    };
+    let lastScene = { covMolecules: 0, ozoneMolecules: 0, aerosolParticles: 0, captureDevices: 0, emitters: [] };
+
+    const measureLabels = {
+      none: "Sin medida complementaria",
+      P1: "P1 · Zona de bajas emisiones",
+      P2: "P2 · Buses eléctricos",
+      P3: "P3 · Restricción vehicular",
+      P4: "P4 · Ciclorrutas y vías peatonales",
+      P5: "P5 · Arborización urbana",
+      P6: "P6 · Corredores de ventilación",
+      P9: "P9 · Teletrabajo y horarios"
+    };
+    const sourceLabels = {
+      fuels: "Combustibles y tráfico: vapores de gasolina, almacenamiento y combustión urbana.",
+      solvents: "Solventes y recubrimientos: pinturas, tintas, adhesivos y limpieza industrial.",
+      products: "Productos y limpieza: fragancias, aerosoles, desengrasantes y productos de consumo.",
+      mixed: "Mezcla urbana: combina combustibles, solventes, comercio, industria y productos volátiles."
+    };
+
+    function experiment() {
+      const result = model.evaluateCovExperiment({ covUgM3: state.concentration, measure: state.measure, covControl: state.covControl });
+      return {
+        ...result,
+        status: result.reductionPercent ? `Reducción de ${fmt(result.reductionPercent, 0)} % respecto a la base experimental` : "Sin cambio respecto a la base experimental"
+      };
+    }
+
+    function sourceFlags() {
+      return {
+        fuels: state.source === "fuels" || state.source === "mixed",
+        solvents: state.source === "solvents" || state.source === "mixed",
+        products: state.source === "products" || state.source === "mixed"
+      };
+    }
+
+    function covMoleculeMarkup(result, mode) {
+      const count = Math.round(6 + ratio(result.covAfter, 5, 50) * 18);
+      const colors = state.source === "fuels" ? ["#315f79"] : state.source === "solvents" ? ["#7c4d9e"] : state.source === "products" ? ["#c05283"] : ["#315f79", "#7c4d9e", "#c05283"];
+      const starts = state.source === "fuels" ? [[86, 265]] : state.source === "solvents" ? [[300, 252]] : state.source === "products" ? [[500, 252]] : [[86, 265], [300, 252], [500, 252]];
+      const markup = Array.from({ length: count }, (_, index) => {
+        const progress = (state.phase * .72 + index / count) % 1;
+        let x;
+        let y;
+        if (mode === "sources") {
+          const start = starts[index % starts.length];
+          x = start[0] + (650 - start[0]) * progress;
+          y = start[1] + (118 - start[1]) * progress + Math.sin((progress + index) * Math.PI * 2) * 7;
+        } else if (index % 2 === 0) {
+          x = 42 + progress * 274;
+          y = 115 + (index % 5) * 34 + Math.sin((progress + index) * Math.PI * 2) * 6;
+        } else {
+          x = 378 + progress * 285;
+          y = 132 + (index % 5) * 31 + Math.cos((progress + index) * Math.PI * 2) * 6;
+        }
+        const color = colors[index % colors.length];
+        return `<g class="cov-lab-molecule" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="8" fill="${color}" opacity=".88"/><text y="3" text-anchor="middle" font-size="6.5" font-weight="900" fill="#fff">COV</text></g>`;
+      }).join("");
+      return { markup, count };
+    }
+
+    function sourcesScene(result) {
+      const flags = sourceFlags();
+      const molecules = covMoleculeMarkup(result, "sources");
+      const captureDevices = state.covControl ? 3 : 0;
+      const capture = state.covControl ? `
+        <g fill="none" stroke="#188b5b" stroke-width="5" stroke-linecap="round" opacity=".9"><path d="M88 230v-42h72"/><path d="M300 220v-42h70"/><path d="M500 220v-42h70"/></g>
+        <g fill="#188b5b"><circle cx="160" cy="188" r="9"/><circle cx="370" cy="178" r="9"/><circle cx="570" cy="178" r="9"/></g>
+        <g transform="translate(215 20)"><rect width="292" height="43" rx="14" fill="#e6f5ed" stroke="#9bcdb5"/><text x="146" y="17" text-anchor="middle" font-size="10" font-weight="900" fill="#176b48">P8 · control directo en la fuente</text><text x="146" y="31" text-anchor="middle" font-size="9" fill="#4c6c5b">Sustitución · contención · recuperación de vapores</text></g>` : `
+        <g transform="translate(248 20)"><rect width="224" height="40" rx="14" fill="#fff" opacity=".93"/><text x="112" y="16" text-anchor="middle" font-size="10" font-weight="900" fill="#704985">Emisiones sin control directo</text><text x="112" y="29" text-anchor="middle" font-size="9" fill="#6e7180">Evaporación y fugas hacia el aire</text></g>`;
+      const svg = svgFrame("Fuentes urbanas de compuestos orgánicos volátiles y estrategias de control en la fuente", `
+        <rect width="720" height="306" fill="url(#sky)"/>${capture}
+        <g opacity="${flags.fuels ? 1 : .24}" transform="translate(22 190)"><rect width="142" height="94" rx="7" fill="#d7e0e4"/><rect x="18" y="25" width="47" height="51" rx="5" fill="#315f79"/><path d="M65 38h28v39" fill="none" stroke="#315f79" stroke-width="7"/><text x="98" y="27" text-anchor="middle" font-size="9" font-weight="900" fill="#315f79">COMBUSTIBLES</text>${car(75, 58, palette.red, .62)}</g>
+        <g opacity="${flags.solvents ? 1 : .24}" transform="translate(220 188)"><rect width="166" height="96" rx="7" fill="#ddd2e5"/><path d="M0 24 34 5l34 19 34-19 35 19" fill="#8a679f"/><g transform="translate(21 51)"><rect width="38" height="34" rx="5" fill="#7c4d9e"/><rect x="65" width="38" height="34" rx="5" fill="#9a6db6"/><text x="62" y="-8" text-anchor="middle" font-size="9" font-weight="900" fill="#67427b">SOLVENTES</text></g></g>
+        <g opacity="${flags.products ? 1 : .24}" transform="translate(428 188)"><rect width="145" height="96" rx="7" fill="#f0dce6"/><rect x="22" y="36" width="28" height="49" rx="7" fill="#c05283"/><rect x="61" y="24" width="28" height="61" rx="7" fill="#d47ca4"/><rect x="100" y="44" width="24" height="41" rx="7" fill="#a84772"/><text x="72" y="16" text-anchor="middle" font-size="9" font-weight="900" fill="#8c3e63">PRODUCTOS</text></g>
+        ${molecules.markup}
+        <g transform="translate(578 53)"><rect width="124" height="100" rx="15" fill="#fff" stroke="#d1c4d9"/><text x="62" y="20" text-anchor="middle" font-size="9" font-weight="900" fill="#6e6077">MEZCLA EQUIVALENTE</text><text x="62" y="55" text-anchor="middle" font-size="25" font-weight="900" fill="#7c4d9e">${fmt(result.covAfter, 1)}</text><text x="62" y="73" text-anchor="middle" font-size="10" font-weight="800" fill="#6e6077">µg/m³ COV</text><text x="62" y="89" text-anchor="middle" font-size="8" fill="#7b7680">valor didáctico</text></g>
+        <rect y="306" width="720" height="94" fill="#fff"/><text x="35" y="336" font-size="10" font-weight="900" fill="#6c6173">DE LA ACTIVIDAD A LA CONCENTRACIÓN</text><text x="35" y="360" font-size="11" fill="#5f6f7a">Uso y almacenamiento</text><path d="M174 356h70" stroke="#7c4d9e" stroke-width="4" marker-end="url(#arrow)"/><text x="269" y="360" font-size="11" fill="#5f6f7a">Masa emitida</text><path d="M372 356h70" stroke="#7c4d9e" stroke-width="4" marker-end="url(#arrow)"/><text x="468" y="360" font-size="11" fill="#5f6f7a">Concentración en el aire</text>
+      `, "#f4eef7");
+      const emitters = [flags.fuels ? "combustibles y tráfico" : null, flags.solvents ? "solventes y recubrimientos" : null, flags.products ? "productos y limpieza" : null].filter(Boolean);
+      return { svg, covMolecules: molecules.count, ozoneMolecules: 0, aerosolParticles: 0, captureDevices, emitters };
+    }
+
+    function fateScene(result) {
+      const molecules = covMoleculeMarkup(result, "fate");
+      const ozoneCount = Math.round(5 + ratio(result.ozoneAfter, 15, 23) * 9);
+      const aerosolCount = Math.round(4 + ratio(result.covAfter, 5, 50) * 8);
+      const ozoneMarkup = Array.from({ length: ozoneCount }, (_, index) => {
+        const progress = (state.phase * .58 + index / ozoneCount) % 1;
+        const x = 500 + ((index * 47 + progress * 90) % 165);
+        const y = 104 + ((index * 39) % 130) + Math.sin((progress + index) * Math.PI * 2) * 5;
+        return `<g class="cov-product" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="9" fill="#d9822b" opacity=".9"/><text y="3.5" text-anchor="middle" font-size="7" font-weight="900" fill="#fff">O₃</text></g>`;
+      }).join("");
+      const aerosolMarkup = Array.from({ length: aerosolCount }, (_, index) => {
+        const progress = (state.phase * .46 + index / aerosolCount) % 1;
+        const x = 460 + ((index * 61 + progress * 80) % 205);
+        const y = 240 + ((index * 29) % 75);
+        return `<circle class="cov-product" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${3 + index % 3}" fill="#677b85" opacity=".68"/>`;
+      }).join("");
+      const pulse = 4 + Math.sin(state.phase * Math.PI * 2) * 3;
+      const svg = svgFrame("Exposición cercana y transformación atmosférica simplificada de una mezcla de compuestos orgánicos volátiles", `
+        <defs><linearGradient id="cov-fate-sky" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f1e8f6"/><stop offset="1" stop-color="#fff2cf"/></linearGradient></defs><rect width="720" height="400" fill="url(#cov-fate-sky)"/>
+        <path d="M350 32v336" stroke="#c7b9cf" stroke-width="2" stroke-dasharray="8 8"/><text x="36" y="42" font-size="12" font-weight="900" fill="#704985">EXPOSICIÓN CERCA DE LA FUENTE</text><text x="390" y="42" font-size="12" font-weight="900" fill="#8a5b1e">TRANSFORMACIÓN ATMOSFÉRICA</text>
+        <g transform="translate(35 220)"><rect width="108" height="83" rx="8" fill="#8d6aa3"/><rect x="24" y="-30" width="28" height="38" rx="4" fill="#65417a"/><text x="54" y="49" text-anchor="middle" font-size="10" font-weight="900" fill="#fff">FUENTE</text></g>
+        <g transform="translate(270 218)"><circle cx="0" cy="-22" r="15" fill="#d9aa90"/><path d="M0-7v54m0-31-23 21m23-21 22 19m-22 12-20 37m20-37 21 37" fill="none" stroke="#3d5968" stroke-width="8" stroke-linecap="round"/><text x="0" y="101" text-anchor="middle" font-size="8" font-weight="900" fill="#536773">EXPOSICIÓN</text></g>
+        <circle cx="636" cy="73" r="31" fill="#f0c75e"/><text x="636" y="77" text-anchor="middle" font-size="9" font-weight="900" fill="#755500">SOL</text><g transform="translate(383 92)"><circle r="11" fill="#2563a8"/><text y="4" text-anchor="middle" font-size="7" font-weight="900" fill="#fff">NOx</text></g>
+        ${molecules.markup}<path d="M438 184 C468 ${166 - pulse} 483 ${166 + pulse} 505 184" fill="none" stroke="#d9822b" stroke-width="5" marker-end="url(#arrow)"/>${ozoneMarkup}${aerosolMarkup}
+        <g transform="translate(390 328)"><rect width="292" height="44" rx="13" fill="#fff" opacity=".93"/><text x="146" y="17" text-anchor="middle" font-size="10" font-weight="900" fill="#566b74">Productos secundarios simplificados</text><text x="146" y="32" text-anchor="middle" font-size="9" fill="#6c7479">O₃ ${fmt(result.ozoneAfter, 1)} ppb · aerosol orgánico secundario</text></g>
+        <g transform="translate(28 65)"><rect width="282" height="49" rx="13" fill="#fff" opacity=".93"/><text x="141" y="19" text-anchor="middle" font-size="10" font-weight="900" fill="#6e4c7e">La composición determina el riesgo</text><text x="141" y="35" text-anchor="middle" font-size="9" fill="#6c6e78">Una cifra total no reemplaza identificar cada compuesto</text></g>
+      `, "#f4eef7");
+      return { svg, covMolecules: molecules.count, ozoneMolecules: ozoneCount, aerosolParticles: aerosolCount, captureDevices: 0, emitters: ["fuente cercana", "NOx", "radiación solar"] };
+    }
+
+    document.title = "Laboratorio de compuestos orgánicos volátiles";
+    document.documentElement.style.setProperty("--accent", "#7c4d9e");
+    document.documentElement.style.setProperty("--scene-tint", "#f4eef7");
+    document.body.classList.toggle("embedded-resource", embedded);
+    root.className = "resource-shell cov-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back particulate-close" id="cov-close" type="button">${embedded ? "← Cerrar laboratorio" : "← Volver al simulador"}</button><span class="resource-tag">Laboratorio de fuentes y química urbana</span></nav>
+      <header class="resource-header cov-header"><div><p class="eyebrow">Familia de compuestos, exposición y precursores</p><h1>COV: de la fuente al aire urbano</h1><p class="lead">Distingue actividad, emisión y concentración; explora el control en la fuente y observa por qué la composición de la mezcla importa tanto para la exposición directa como para la química atmosférica.</p></div><div class="header-mark cov-mark" aria-hidden="true">COV</div></header>
+      <section class="cov-layout" aria-label="Laboratorio de compuestos orgánicos volátiles">
+        <article class="card scene-card cov-scene-card">
+          <div class="card-head"><div><h2 id="cov-scene-title"></h2><p id="cov-scene-note"></p></div><span class="live-badge" id="cov-animation-badge"></span></div>
+          <div class="cov-view-tabs" role="tablist" aria-label="Vista del fenómeno"><button type="button" data-cov-view="sources" role="tab">Fuentes y control</button><button type="button" data-cov-view="fate" role="tab">Destino y efectos</button></div>
+          <div class="scene cov-scene" id="cov-scene"></div><div class="scene-legend" id="cov-legend"></div>
+          <div class="cov-context-grid"><article><span>COV actual del simulador</span><strong>${fmt(currentCov, 1)} <small>µg/m³</small></strong><small>Valor transferido; no se vuelve a reducir dentro del experimento.</small></article><article><span>Significado de la métrica</span><strong>Mezcla equivalente</strong><small>Concentración didáctica de COV reactivos; no es TVOC medido ni concentración de benceno.</small></article></div>
+        </article>
+        <aside class="card control-card cov-controls">
+          <div><h2>Experimenta</h2><p class="control-intro">Las medidas son demostrativas y no modifican tu plan.</p></div>
+          <div class="control-group"><label class="control-label" for="cov-concentration"><span>Concentración experimental</span><span class="control-readout" id="cov-concentration-readout"></span></label><input id="cov-concentration" type="range" min="5" max="50" step="0.1"><div class="range-labels"><span>5 µg/m³</span><span>50 µg/m³</span></div></div>
+          <div class="control-group"><label class="control-label" for="cov-source"><span>Perfil de fuente</span></label><select id="cov-source" class="select-control"><option value="fuels">Combustibles y tráfico</option><option value="solvents">Solventes y recubrimientos</option><option value="products">Productos y limpieza</option><option value="mixed">Fuente mixta</option></select><small class="cov-source-note" id="cov-source-note"></small></div>
+          <div class="control-group"><label class="control-label" for="cov-measure"><span>Medida complementaria</span></label><select id="cov-measure" class="select-control">${Object.entries(measureLabels).map(([code, label]) => `<option value="${code}">${label}</option>`).join("")}</select></div>
+          <label class="mitigation-toggle cov-control-toggle"><input id="cov-control" type="checkbox"><span><strong>Aplicar P8 · Control directo de COV</strong><small>Reduce 35 % mediante estrategias de sustitución, contención y recuperación.</small></span></label>
+          <div class="playback-controls"><button type="button" id="cov-play"></button><button type="button" id="cov-reset">Restablecer</button></div>
+          <section class="cov-results" aria-live="polite"><span class="measure-name" id="cov-measure-name"></span><div class="cov-result-pair"><article><span>Antes</span><strong id="cov-before"></strong></article><i aria-hidden="true">→</i><article><span>Después</span><strong id="cov-after"></strong></article></div><strong class="cov-reduction" id="cov-reduction"></strong><small class="cov-difference" id="cov-difference"></small><div class="cov-ozone-result"><span>Respuesta secundaria de O₃</span><strong id="cov-ozone"></strong><small id="cov-ozone-note"></small></div><p class="cov-method-note">No existe un umbral sanitario único para esta mezcla agregada. Interpretar riesgo requiere conocer composición, método y tiempo de exposición.</p></section>
+        </aside>
+      </section>
+      <section class="particulate-info-grid" aria-label="Claves para interpretar COV"><article class="card info-card"><span class="info-icon" aria-hidden="true">≠</span><h2>Una familia, no una sustancia</h2><p>Volatilidad, toxicidad y reactividad cambian entre combustibles, solventes, aromas y otros compuestos.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">2×</span><h2>Dos rutas de impacto</h2><p>Puede existir exposición directa cerca de la fuente y formación posterior de O₃ y aerosol secundario.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">1º</span><h2>Control en la fuente</h2><p>Sustituir, contener y prevenir fugas tiene prioridad conceptual sobre tratar la emisión al final.</p></article></section>
+      <section class="card cov-context-card"><div><p class="eyebrow">Cómo interpretar la cifra</p><h2>Sin semáforo agregado de seguridad</h2><p>La Resolución 2254 no fija un máximo para COV agregados y las guías OMS 2021 se concentran en seis contaminantes clásicos. Compuestos específicos, como el benceno, requieren evaluación propia.</p></div><div class="cov-context-facts"><article><strong>Minambiente</strong><span>Guía de control, monitoreo y seguimiento por fuentes, procesos y compuestos.</span></article><article><strong>Medición</strong><span>El resultado depende de qué compuestos y métodos analíticos se incluyan.</span></article></div><div class="standards-links"><a href="https://www.minambiente.gov.co/wp-content/uploads/2021/12/GUIA-EMISIONES-COMPUESTOS-VOLATILES.pdf" target="_blank" rel="noopener">Guía nacional de COV</a><a href="https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf" target="_blank" rel="noopener">Resolución 2254 de 2017</a><a href="https://www.epa.gov/indoor-air-quality-iaq/technical-overview-volatile-organic-compounds" target="_blank" rel="noopener">Panorama técnico · EPA</a></div></section>`;
+
+    const elements = { scene: document.getElementById("cov-scene"), badge: document.getElementById("cov-animation-badge"), concentration: document.getElementById("cov-concentration"), source: document.getElementById("cov-source"), measure: document.getElementById("cov-measure"), covControl: document.getElementById("cov-control"), play: document.getElementById("cov-play") };
+
+    function renderScene() {
+      const result = experiment();
+      lastScene = state.view === "sources" ? sourcesScene(result) : fateScene(result);
+      elements.scene.innerHTML = lastScene.svg;
+    }
+
+    function render() {
+      const result = experiment();
+      document.querySelectorAll("[data-cov-view]").forEach(button => {
+        const active = button.dataset.covView === state.view;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.getElementById("cov-scene-title").textContent = state.view === "sources" ? "De las actividades a la concentración urbana" : "Exposición directa y productos secundarios";
+      document.getElementById("cov-scene-note").textContent = state.view === "sources" ? "El perfil cambia lo que se destaca, pero no altera silenciosamente la concentración." : "La escena separa dos rutas de impacto y no representa toxicología exacta.";
+      elements.badge.textContent = state.playing ? "En movimiento" : "En pausa";
+      elements.badge.classList.toggle("paused", !state.playing);
+      elements.play.textContent = state.playing ? "Pausar animación" : "Reproducir animación";
+      elements.concentration.value = state.concentration;
+      elements.source.value = state.source;
+      elements.measure.value = state.measure;
+      elements.covControl.checked = state.covControl;
+      document.getElementById("cov-concentration-readout").textContent = `${fmt(state.concentration, 1)} µg/m³`;
+      document.getElementById("cov-source-note").textContent = sourceLabels[state.source];
+      document.getElementById("cov-measure-name").textContent = `${measureLabels[state.measure]}${state.covControl ? " + P8" : ""}`;
+      document.getElementById("cov-before").textContent = `${fmt(result.covBefore, 1)} µg/m³`;
+      document.getElementById("cov-after").textContent = `${fmt(result.covAfter, 1)} µg/m³`;
+      document.getElementById("cov-reduction").textContent = result.status;
+      document.getElementById("cov-reduction").className = `cov-reduction ${result.reductionPercent ? "decrease" : "stable"}`;
+      document.getElementById("cov-difference").textContent = result.difference ? `Diferencia absoluta: ${fmt(result.difference, 1)} µg/m³` : "Diferencia absoluta: 0,0 µg/m³";
+      const ozoneSign = result.ozoneChangePercent > 0 ? "+" : "";
+      document.getElementById("cov-ozone").textContent = `${fmt(result.ozoneBefore, 1)} → ${fmt(result.ozoneAfter, 1)} ppb (${ozoneSign}${fmt(result.ozoneChangePercent, 0)} %)`;
+      document.getElementById("cov-ozone").className = result.ozoneChangePercent > 0 ? "increase" : result.ozoneChangePercent < 0 ? "decrease" : "stable";
+      document.getElementById("cov-ozone-note").textContent = result.ozoneChangePercent > 0 ? "La reducción aislada de NOx puede aumentar O₃ en el régimen simplificado." : result.ozoneChangePercent < 0 ? "El control suficiente de COV o la ventilación reduce O₃ en el modelo." : "La combinación no activa un cambio de O₃ en las reglas actuales.";
+      document.getElementById("cov-legend").innerHTML = state.view === "sources" ? `<span class="legend-item"><i class="legend-dot" style="--dot:#315f79"></i>Combustibles</span><span class="legend-item"><i class="legend-dot" style="--dot:#7c4d9e"></i>Solventes</span><span class="legend-item"><i class="legend-dot" style="--dot:#c05283"></i>Productos</span><span class="legend-item"><i class="legend-dot" style="--dot:#188b5b"></i>Control P8</span>` : `<span class="legend-item"><i class="legend-dot" style="--dot:#7c4d9e"></i>COV</span><span class="legend-item"><i class="legend-dot" style="--dot:#d9822b"></i>O₃</span><span class="legend-item"><i class="legend-dot" style="--dot:#677b85"></i>Aerosol secundario</span>`;
+      renderScene();
+    }
+
+    const viewButtons = [...document.querySelectorAll("[data-cov-view]")];
+    viewButtons.forEach((button, index) => {
+      button.addEventListener("click", () => { state.view = button.dataset.covView; render(); });
+      button.addEventListener("keydown", event => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const next = viewButtons[(index + direction + viewButtons.length) % viewButtons.length];
+        state.view = next.dataset.covView;
+        render();
+        next.focus();
+      });
+    });
+    elements.concentration.addEventListener("input", () => { state.concentration = Number(elements.concentration.value); render(); });
+    elements.source.addEventListener("change", () => { state.source = elements.source.value; render(); });
+    elements.measure.addEventListener("change", () => { state.measure = elements.measure.value; render(); });
+    elements.covControl.addEventListener("change", () => { state.covControl = elements.covControl.checked; render(); });
+    elements.play.addEventListener("click", () => { state.playing = !state.playing; render(); });
+    document.getElementById("cov-reset").addEventListener("click", () => { Object.assign(state, { view: "sources", concentration: model.baseline.cov, source: "mixed", measure: "none", covControl: false, playing: !reducedMotion, phase: 0 }); render(); });
+    document.getElementById("cov-close").addEventListener("click", () => {
+      if (embedded && window.parent !== window) window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      else if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) history.back();
+      else location.href = "index.html";
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && embedded && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      }
+    });
+
+    function renderResourceToText() {
+      const result = experiment();
+      return JSON.stringify({
+        resource: "cov",
+        view: state.view,
+        coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
+        current: { covEquivalentUgM3: Number(currentCov.toFixed(2)), meaning: "concentración equivalente didáctica de COV reactivos" },
+        experiment: { beforeCovUgM3: Number(result.covBefore.toFixed(3)), afterCovUgM3: Number(result.covAfter.toFixed(3)), differenceUgM3: Number(result.difference.toFixed(3)), reductionPercent: Number(result.reductionPercent.toFixed(1)), status: result.status },
+        source: state.source,
+        measures: { complementary: state.measure, directCovControl: state.covControl ? "P8" : "none" },
+        chemistry: { noxBeforePpb: Number(result.reference.nox.toFixed(2)), noxAfterPpb: Number(result.values.nox.toFixed(2)), windBeforeMs: Number(result.reference.wind.toFixed(2)), windAfterMs: Number(result.values.wind.toFixed(2)), ozoneBeforePpb: Number(result.ozoneBefore.toFixed(3)), ozoneAfterPpb: Number(result.ozoneAfter.toFixed(3)), ozoneChangePercent: Number(result.ozoneChangePercent.toFixed(1)), factors: Object.fromEntries(Object.entries(result.ozoneFactors).map(([key, value]) => [key, Number((value * 100).toFixed(1))])) },
+        interpretation: { aggregateHealthThreshold: null, compositionRequired: true, methodRequired: true },
+        animation: { playing: state.playing, phase: Number(state.phase.toFixed(3)) },
+        visible: { covMolecules: lastScene.covMolecules, ozoneMolecules: lastScene.ozoneMolecules, aerosolParticles: lastScene.aerosolParticles, captureDevices: lastScene.captureDevices, emitters: lastScene.emitters }
+      });
+    }
+
+    window.RESOURCE = { kind: "cov-sources-control-fate" };
+    window.render_resource_to_text = renderResourceToText;
+    window.render_game_to_text = renderResourceToText;
+    window.advanceTime = ms => {
+      if (state.playing) state.phase = (state.phase + Math.max(0, Number(ms) || 0) / 6000) % 1;
+      renderScene();
+      return renderResourceToText();
+    };
+
+    let lastFrame = performance.now();
+    function animateCov(now) {
+      const delta = Math.min(50, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      if (state.playing) {
+        state.phase = (state.phase + delta / 6000) % 1;
+        renderScene();
+      }
+      requestAnimationFrame(animateCov);
+    }
+    render();
+    if (!window.__vt_pending) requestAnimationFrame(animateCov);
+  }
+
   const key = document.body.dataset.resource;
   const root = document.getElementById("resource-app");
   if (!root) return;
@@ -1574,6 +1848,11 @@
 
   if (key === "o3") {
     renderOzoneLab(root);
+    return;
+  }
+
+  if (key === "cov") {
+    renderCovLab(root);
     return;
   }
 
