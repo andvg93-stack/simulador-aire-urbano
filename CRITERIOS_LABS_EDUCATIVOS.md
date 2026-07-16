@@ -334,3 +334,127 @@ La interfaz puede redondear a una cifra decimal, pero `render_game_to_text()` co
 - [Ministerio de Ambiente y Desarrollo Sostenible, Resolución 2254 de 2017](https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf)
 - [OMS, preguntas y respuestas sobre las guías mundiales de calidad del aire](https://www.who.int/news-room/questions-and-answers/item/who-global-air-quality-guidelines)
 - [EPA, información básica sobre ozono troposférico](https://www.epa.gov/ground-level-ozone-pollution/ground-level-ozone-basics)
+
+---
+
+# Auditoría y plan específico: compuestos orgánicos volátiles (COV)
+
+## Diagnóstico del recurso actual
+
+La revisión de código y la auditoría con Playwright en escritorio y móvil confirmaron:
+
+- Correcto: `?value=33.9` conserva el resultado de 33,9 µg/m³; el deslizador y la selección de extracción responden; la página no desborda en 390×844 y no produjo errores de consola.
+- Defectuoso: “En vivo” es una escena estática. `advanceTime(5000)` no cambia vapores, trayectorias ni fotograma.
+- Crítico: la tarjeta COV todavía navega directamente. Al regresar se recarga `index.html`; P8 deja de estar seleccionada y los 20 puntos usados vuelven a cero.
+- Incorrecto semánticamente: el recurso llama “emisión” a un resultado expresado en µg/m³, que es una unidad de concentración. No separa actividad, flujo emitido, concentración ambiental y exposición cercana.
+- Inconsistente: 33,9 µg/m³ se convierte internamente en “44 % de uso de solventes” mediante una interpolación sin significado físico visible.
+- Inconsistente: el control recorre 5–70 µg/m³, aunque la tarjeta y el modelo principal presentan COV en un intervalo de 5–50 µg/m³.
+- Inconsistente con el simulador: activar “extracción” con el escenario transferido reduce 33,9 a 16,0 µg/m³, aproximadamente 52,9 %. P8 en el modelo principal aplica −35 % y debería producir 22,0 µg/m³.
+- Incorrecto conceptualmente: “Emisión baja/media/alta” sale de tercios arbitrarios del deslizador y aparenta ser una clasificación sanitaria o normativa.
+- Insuficiente: la escena solo representa un taller interior con cuatro recipientes. El simulador modela una concentración urbana y también incluye combustibles, tráfico, comercio, industria y productos volátiles.
+- Insuficiente: todos los COV se tratan como una sustancia única. No se explica que composición, toxicidad, volatilidad y reactividad fotoquímica varían entre compuestos ni que una cifra agregada depende del método de medición.
+- Insuficiente: no muestra exposición directa cerca de la fuente, formación de O₃ y aerosol orgánico secundario, ni los efectos exactos de P1, P2, P3, P4, P5, P6, P8 y P9.
+- Limitado para pruebas: `render_game_to_text()` no informa fase, moléculas visibles, fuente, medidas, concentración antes/después ni respuesta secundaria.
+
+## Objetivo educativo
+
+El estudiante deberá comprender que:
+
+- COV es una familia de sustancias que pueden evaporarse e incorporarse al aire; no es un compuesto químico único.
+- El uso o almacenamiento de un producto, la masa emitida, la concentración en el aire y la exposición son magnitudes relacionadas, pero no intercambiables.
+- Las fuentes urbanas incluyen combustibles y tráfico, solventes y recubrimientos, procesos industriales y productos de limpieza o consumo.
+- La composición importa: distintos COV presentan toxicidades y reactividades fotoquímicas diferentes. Un valor agregado menor no demuestra por sí solo que una mezcla sea más segura.
+- Los COV pueden afectar directamente a personas próximas a la fuente y, además, reaccionar en la atmósfera para formar O₃ y aerosol orgánico secundario.
+- El control en la fuente —sustitución, contención, prevención de fugas y recuperación de vapores— precede conceptualmente al tratamiento final.
+- P8 es la medida directa del simulador para COV, mientras las políticas de movilidad, vegetación, ventilación y actividad urbana producen reducciones menores o efectos indirectos.
+
+La variable principal continuará en µg/m³ para no rehacer tarjetas, gráficas y reporte, pero se rotulará como **concentración equivalente didáctica de COV reactivos**. No se presentará como TVOC medido, concentración de benceno ni inventario de emisiones.
+
+## Contenido visible propuesto
+
+El laboratorio tendrá dos vistas sincronizadas:
+
+1. **Fuentes y control:** perfiles urbanos de combustibles/tráfico, solventes/recubrimientos, productos de limpieza/comercio y mezcla. Mostrará evaporación, fugas, recipientes, recuperación de vapores, contención y sustitución en la fuente.
+2. **Destino y efectos:** recorrido desde la fuente hasta una zona de exposición cercana y, en paralelo, transformación atmosférica simplificada hacia O₃ y aerosol orgánico secundario. La vista diferenciará efecto directo y efecto secundario sin simular toxicología exacta.
+
+Ambas vistas mostrarán:
+
+- Concentración actual transferida desde el simulador, separada de la base experimental de 33,9 µg/m³ para evitar reducciones duplicadas.
+- COV antes/después de las medidas, reducción porcentual y diferencia absoluta.
+- Respuesta secundaria de O₃ antes/después mediante la misma función compartida con NOx y O₃.
+- Perfil de fuente destacado y estrategias de control visibles.
+- Nota permanente: la cifra representa una mezcla equivalente didáctica; no permite clasificar riesgo sanitario sin conocer composición, método y tiempo de exposición.
+- Contexto colombiano: la Resolución 2254 de 2017 no establece un máximo de calidad del aire para COV agregados; la guía nacional de Minambiente aborda control, monitoreo y seguimiento de emisiones por fuentes y compuestos.
+- Contexto OMS: las guías mundiales de 2021 cubren seis contaminantes clásicos y no fijan un valor para COV agregados. El benceno se mostrará únicamente como ejemplo de evaluación específica, nunca como marcador para el valor total del simulador.
+
+No habrá barra normativa ni estados “bajo/medio/alto”. El resultado dirá “sin cambio”, “reducción de X %” o “X % por encima de la base experimental”.
+
+## Controles y comportamiento esperado
+
+| Control | Opciones | Resultado visible esperado |
+|---|---|---|
+| Vista | Fuentes y control; Destino y efectos | Cambia la escena sin reiniciar concentración, fuente, medidas ni fase. |
+| Concentración experimental | 5–50 µg/m³, paso 0,1; inicio 33,9 | Cambia cifra y densidad de la mezcla equivalente, sin alterar fuente, composición ni controles. |
+| Perfil de fuente | Combustibles y tráfico; Solventes y recubrimientos; Productos y limpieza; Mixta | Cambia emisores, colores de familias y explicación; no modifica silenciosamente la concentración. |
+| Medida complementaria | Sin medida; P1; P2; P3; P4; P5; P6; P9 | Aplica exactamente −8 %, −4 %, −4 %, −4 %, −2 %, −6 % y −3 % a COV, además de sus efectos compartidos sobre NOx y meteorología. |
+| Control directo | Sin P8; con P8 | Aplica −35 % a COV y cambia visualmente sustitución, contención y recuperación de vapores. |
+| Reproducir/pausar | Estado binario | Mueve vapores, captura, transporte y productos secundarios; al pausar conserva exactamente el fotograma. |
+| Restablecer | Acción | Recupera vista de fuentes, 33,9 µg/m³, fuente mixta, ninguna medida y fase cero; respeta movimiento reducido. |
+
+El perfil de fuente es explicativo: no asignará un factor numérico de toxicidad o reactividad a una mezcla no caracterizada.
+
+## Reglas del modelo que debe reproducir
+
+Se extenderá el modelo compartido con P5 y una función pura `evaluateCovExperiment({ covUgM3, measure, covControl })`. La reducción se calculará de forma aditiva con los mismos coeficientes de `index.html`; la respuesta de O₃ reutilizará `ozoneResponse`.
+
+Con base experimental de 33,9 µg/m³:
+
+| Medida | COV después | Reducción | Respuesta de O₃ del modelo actual |
+|---|---:|---:|---:|
+| P1 | 31,188 µg/m³ | 8 % | +8 % |
+| P2 | 32,544 µg/m³ | 4 % | +8 % |
+| P3 | 32,544 µg/m³ | 4 % | Sin cambio |
+| P4 | 32,544 µg/m³ | 4 % | Sin cambio |
+| P5 | 33,222 µg/m³ | 2 % | Sin cambio |
+| P6 | 31,866 µg/m³ | 6 % | −9 % por ventilación |
+| P8 | 22,035 µg/m³ | 35 % | −12 % |
+| P9 | 32,883 µg/m³ | 3 % | Sin cambio |
+| P1 + P8 | 19,323 µg/m³ | 43 % | −12 % |
+| P6 + P8 | 20,001 µg/m³ | 41 % | −21 % por química y ventilación |
+
+La interfaz redondeará a una cifra decimal; el estado textual conservará precisión suficiente para las pruebas. Las combinaciones no se codificarán como una tabla paralela.
+
+## Implementación e interfaces previstas
+
+- Mantener `recurso-cov.html`, añadir favicon válido y cargar el modelo compartido antes de `recurso-didactico.js`.
+- Crear `renderCovLab()` y estilos aislados de COV; la configuración genérica actual dejará de usarse para esta ruta.
+- Extender el modelo compartido con el efecto de P5 y el evaluador puro de COV; actualizar P5 en `index.html` para que simulador y laboratorio consuman una sola fuente de coeficientes.
+- Mantener `COV` y µg/m³ en tarjeta, gráficas y reporte por compatibilidad, acompañados de la definición “concentración equivalente didáctica de COV reactivos” en laboratorio y nota metodológica del reporte.
+- Aceptar `current=<µg/m³>`, `value=<µg/m³>` como compatibilidad, `view=sources|fate` y `embedded=1`.
+- Con `current`, mostrar el estado transferido e iniciar el experimento en 33,9 µg/m³. Con `value`, inicializar ambos con el valor heredado. Si aparecen los dos, `current` tendrá precedencia para el estado y el experimento conservará su base independiente.
+- Incorporar COV al diálogo educativo existente, con título y descripción propios. Cerrar mediante control externo, control interno, Escape o `educational-resource:close`, conservando políticas, presupuesto, año, historial y foco.
+- Implementar animación determinista con ciclo de 6000 ms. `advanceTime(ms)` solo avanzará la fase al reproducir.
+- Ampliar `render_game_to_text()` con vista, coordenadas, valor actual, experimento antes/después, fuente, medidas, efectos de COV/NOx/viento, O₃ antes/después, reproducción, fase y entidades visibles.
+- Representar sustitución, contención, captura y recuperación como estrategias didácticas asociadas a P8, sin asignar eficiencias adicionales no presentes en el simulador.
+- Registrar implementación, pruebas y desviaciones en `progress.md`.
+
+## Aceptación específica de COV
+
+- Verificar ausencia de parámetros, `current=33.9`, `value=33.9` y precedencia de `current`; nunca convertir el valor transferido en un porcentaje visible de solventes.
+- Probar 5, 33,9 y 50 µg/m³, comprobando cifras, densidad y mensajes relativos; el control no deberá producir 70 µg/m³.
+- Comparar P1, P2, P3, P4, P5, P6, P8 y P9, además de todas las combinaciones previstas con P8, contra la función compartida.
+- Confirmar visual y textualmente P1/P2 con O₃ +8 %, P6 con −9 %, P8 y P1+P8 con −12 %, y P6+P8 con −21 %.
+- Confirmar que cambiar fuente o vista no altera cifras ni reinicia la fase.
+- Verificar reproducción, pausa, restablecimiento, movimiento reducido y avance determinista; vapores y productos secundarios permanecerán dentro del `viewBox`.
+- Abrir con P8 seleccionada y 20 puntos usados; cerrar por las cuatro vías y conservar exactamente política, presupuesto, año e historial, restaurando el foco a COV.
+- Revisar recurso directo y diálogo en 1280×900 y 390×844, pestañas por teclado, etiquetas accesibles, desbordamiento, consola y solicitudes fallidas.
+- Ejecutar regresión de PM2.5/PM10, CO₂, NOx, O₃, recursos genéricos, gráficas, reporte y auditoría de las 370 combinaciones.
+
+## Fuentes primarias y oficiales
+
+- [Minambiente, Guía nacional para el control, monitoreo y seguimiento de emisiones de COV](https://www.minambiente.gov.co/wp-content/uploads/2021/12/GUIA-EMISIONES-COMPUESTOS-VOLATILES.pdf)
+- [Minambiente, Resolución 2254 de 2017](https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf)
+- [OMS, alcance de las guías mundiales de calidad del aire de 2021](https://www.who.int/news-room/questions-and-answers/item/who-global-air-quality-guidelines)
+- [OMS, información sobre exposición a benceno](https://www.who.int/teams/environment-climate-change-and-health/chemical-safety-and-health/health-impacts/chemicals/benzene)
+- [EPA, panorama técnico y diferencias entre COV interiores y exteriores](https://www.epa.gov/indoor-air-quality-iaq/technical-overview-volatile-organic-compounds)
+- [EPA, definición regulatoria y diferencias de reactividad fotoquímica](https://www.epa.gov/air-emissions-inventories/what-definition-voc)

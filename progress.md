@@ -166,3 +166,16 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación visual y accesible: formación/transporte y exposición/referencias revisadas en 1280×900 y 390×844; pestañas operables con flechas, sin moléculas fuera del `viewBox`, desbordamiento, errores de consola ni solicitudes 404.
 - Regresión final: el cliente determinista oficial confirmó PM2.5, CO₂, NOx, O₃ y el recurso genérico COV; la auditoría conserva 370 combinaciones evaluadas y 39 planes aceptables.
 - Pendientes conocidos: ninguno dentro del alcance del laboratorio de O₃.
+
+## Auditoría y plan del laboratorio de COV
+
+- Rama de trabajo: `codex/recurso-cov`.
+- Alcance de esta iteración: auditoría funcional, contraste científico y plan; el recurso COV todavía no se modificó.
+- Auditoría Playwright: `?value=33.9` conserva 33,9 µg/m³, los controles responden, no hay desbordamiento en 390×844 ni errores de consola.
+- Hallazgo funcional: la escena “En vivo” es estática y `advanceTime(5000)` no cambia el SVG.
+- Hallazgo crítico de integración: regresar desde COV recarga el simulador; P8 y sus 20 puntos usados se pierden.
+- Hallazgo de modelo: el recurso convierte 33,9 µg/m³ en 44 % de uso de solventes, recorre 5–70 µg/m³ y la extracción produce 16,0 µg/m³, en vez de los 22,0 µg/m³ correspondientes al −35 % de P8.
+- Hallazgo científico: se llama “emisión” a una concentración, se asignan estados bajos/medios/altos arbitrarios y se presenta una familia heterogénea como si fuera una sustancia única con riesgo uniforme.
+- Referencias verificadas: Minambiente identifica fuentes, exposición directa, formación de O₃/aerosol secundario y control prioritario en la fuente; la Resolución 2254 y las guías OMS 2021 no fijan un máximo para COV agregados.
+- Decisión de plan: conservar µg/m³ como concentración equivalente didáctica de COV reactivos, sin semáforo sanitario, y separar fuente/control de destino/efectos.
+- El plan completo, sus controles, resultados de política, integración y aceptación quedaron registrados en `CRITERIOS_LABS_EDUCATIVOS.md`.
