@@ -169,6 +169,44 @@
     };
   }
 
+  function evaluateTemperatureExperiment({ temperatureC = BASELINE.temp, measures = [] } = {}) {
+    const selected = [...new Set(Array.isArray(measures) ? measures : [measures])]
+      .filter(code => code === "P4" || code === "P5" || code === "P6");
+    const reference = { ...BASELINE, temp: clamp(Number(temperatureC), 18, 34) };
+    const effects = selected.reduce((sum, code) => {
+      const effect = policyEffects(code);
+      sum.nox += effect.nox;
+      sum.cov += effect.cov;
+      sum.temp += effect.temp;
+      sum.wind += effect.wind;
+      return sum;
+    }, { nox: 0, cov: 0, temp: 0, wind: 0 });
+    const values = {
+      nox: BASELINE.nox * (1 + effects.nox),
+      cov: BASELINE.cov * (1 + effects.cov),
+      temp: reference.temp + effects.temp,
+      wind: BASELINE.wind * (1 + effects.wind)
+    };
+    const ozoneBefore = ozoneResponse(reference, BASELINE);
+    const ozoneAfter = ozoneResponse(values, BASELINE);
+    const difference = values.temp - reference.temp;
+    return {
+      reference,
+      values,
+      effects,
+      selected,
+      temperatureBefore: reference.temp,
+      temperatureAfter: values.temp,
+      difference,
+      status: Math.abs(difference) < 0.0001 ? "Sin cambio" : difference < 0 ? `Reducción de ${Math.abs(difference).toFixed(1)} °C` : `Aumento de ${difference.toFixed(1)} °C`,
+      ozoneBefore: ozoneBefore.value,
+      ozoneAfter: ozoneAfter.value,
+      ozoneChangePercent: ozoneBefore.value ? (ozoneAfter.value / ozoneBefore.value - 1) * 100 : 0,
+      ozoneFactorsBefore: ozoneBefore.factors,
+      ozoneFactorsAfter: ozoneAfter.factors
+    };
+  }
+
   global.NoxModel = Object.freeze({
     baseline: BASELINE,
     policyEffects,
@@ -181,6 +219,7 @@
     evaluateExperiment,
     evaluateOzoneExperiment,
     evaluateCovExperiment,
+    evaluateTemperatureExperiment,
     colombiaOneHourUgM3: 200,
     ozoneEightHourUgM3: 100,
     ozonePeakSeasonUgM3: 60

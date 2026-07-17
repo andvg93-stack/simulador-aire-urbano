@@ -1031,3 +1031,130 @@ input[type="range"] {
   .cov-context-facts { grid-template-columns: 1fr; }
   .cov-context-card .standards-links { grid-column: 1; }
 }
+
+/* Laboratorio de temperatura urbana */
+.temperature-header { align-items: center; }
+.temperature-mark { color: #fff; background: #c44935; border-color: #c44935; font-size: 30px; }
+
+.temperature-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(370px, .82fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.temperature-scene-card { overflow: hidden; }
+.temperature-view-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: #faeee8;
+}
+
+.temperature-view-tabs button {
+  min-height: 42px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  color: #994230;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.temperature-view-tabs button.active { color: #fff; background: #c44935; box-shadow: 0 5px 14px rgba(196, 73, 53, .25); }
+.temperature-scene, .temperature-scene svg { min-height: 400px; }
+.temperature-o3 text { pointer-events: none; }
+
+.temperature-context-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  border-top: 1px solid var(--line);
+  background: var(--line);
+}
+
+.temperature-context-grid article { display: grid; gap: 5px; padding: 16px 18px; background: #fff; }
+.temperature-context-grid span { color: #a24332; font-size: 10px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.temperature-context-grid strong { color: #17202a; font-size: 23px; }
+.temperature-context-grid strong small { color: #785f58; font-size: 11px; }
+.temperature-context-grid article > small { color: #716d6a; font-size: 11px; line-height: 1.4; }
+
+.temperature-controls { gap: 14px; }
+.temperature-control-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.temperature-profile-note { margin-top: -7px; color: #716d6a; font-size: 10px; line-height: 1.45; }
+.temperature-controls .playback-controls button:first-child { border-color: #8e382b; background: #a94332; }
+
+.temperature-measures {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #e7d1c9;
+  border-radius: 12px;
+  background: #fcf7f4;
+}
+
+.temperature-measures legend { padding: 0 5px; color: #705e57; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.temperature-measures label { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: center; min-height: 38px; padding: 6px 8px; border-radius: 9px; cursor: pointer; }
+.temperature-measures label:hover { background: #f6e7e1; }
+.temperature-measures input { width: 18px; height: 18px; accent-color: #c44935; }
+.temperature-measures span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.temperature-measures strong { color: #4f3530; font-size: 11px; }
+.temperature-measures small { color: #a24332; font-size: 10px; font-weight: 900; }
+
+.temperature-results { display: grid; gap: 9px; }
+.temperature-result-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+.temperature-result-pair article { display: grid; align-content: center; gap: 3px; min-width: 0; padding: 11px; border: 1px solid #e5d2cb; border-radius: 12px; background: #fcf8f6; }
+.temperature-result-pair article > span { color: #7c6962; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.temperature-result-pair article > strong { color: #17202a; font-size: 20px; white-space: nowrap; }
+.temperature-result-pair > i { align-self: center; color: #c44935; font-size: 21px; font-style: normal; }
+.temperature-change { font-size: 12px; }
+.temperature-change.decrease { color: #16714a; }
+.temperature-change.increase { color: #b33d32; }
+.temperature-change.stable { color: #536773; }
+
+.temperature-ozone-result { display: grid; gap: 4px; padding: 11px; border-radius: 12px; background: #f7f2e8; }
+.temperature-ozone-result > span { color: #78663e; font-size: 9px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.temperature-ozone-result > strong { font-size: 16px; }
+.temperature-ozone-result > strong.increase { color: #ac332f; }
+.temperature-ozone-result > strong.decrease { color: #16714a; }
+.temperature-ozone-result > strong.stable { color: #536773; }
+.temperature-ozone-result > small { color: #6d6b61; font-size: 10px; line-height: 1.4; }
+.temperature-method-note { margin: 0; padding: 10px; border: 1px solid #d6e2e5; border-radius: 11px; color: #536773; background: #edf5f7; font-size: 10px; line-height: 1.45; }
+
+.temperature-context-card {
+  display: grid;
+  grid-template-columns: minmax(250px, .85fr) minmax(390px, 1.15fr);
+  gap: 18px 28px;
+  align-items: start;
+  margin-top: 18px;
+  padding: 21px;
+}
+
+.temperature-context-card h2 { margin: 0; }
+.temperature-context-card p:not(.eyebrow) { margin: 8px 0 0; color: #5f6f7a; font-size: 12px; line-height: 1.55; }
+.temperature-context-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.temperature-context-facts article { display: grid; gap: 6px; padding: 14px; border: 1px solid #e5d2cb; border-radius: 12px; background: #fcf8f6; }
+.temperature-context-facts strong { color: #9d4332; font-size: 13px; }
+.temperature-context-facts span { color: #686f76; font-size: 11px; line-height: 1.45; }
+.temperature-context-card .standards-links { grid-column: 1 / -1; }
+.temperature-lab .particulate-info-grid .info-icon { width: 54px; font-size: 11px; font-weight: 900; text-transform: uppercase; }
+
+@media (max-width: 980px) {
+  .temperature-layout { grid-template-columns: 1fr; }
+  .temperature-controls { min-height: auto; }
+}
+
+@media (max-width: 680px) {
+  .temperature-mark { display: none; }
+  .temperature-scene, .temperature-scene svg { min-height: 260px; }
+  .temperature-context-grid, .temperature-control-row { grid-template-columns: 1fr; }
+  .temperature-result-pair article { padding: 9px; }
+  .temperature-result-pair article > strong { font-size: 17px; }
+  .temperature-context-card { grid-template-columns: 1fr; padding: 17px; }
+  .temperature-context-facts { grid-template-columns: 1fr; }
+  .temperature-context-card .standards-links { grid-column: 1; }
+}

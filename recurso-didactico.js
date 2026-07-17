@@ -1827,6 +1827,267 @@
     if (!window.__vt_pending) requestAnimationFrame(animateCov);
   }
 
+  function renderTemperatureLab(root) {
+    const model = window.NoxModel;
+    if (!model?.evaluateTemperatureExperiment) return;
+    const params = new URLSearchParams(location.search);
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const embedded = params.get("embedded") === "1";
+    const currentParam = Number(params.get("current"));
+    const legacyParam = Number(params.get("value"));
+    const hasCurrent = params.has("current") && Number.isFinite(currentParam);
+    const hasLegacy = params.has("value") && Number.isFinite(legacyParam);
+    const currentTemperature = clamp(hasCurrent ? currentParam : hasLegacy ? legacyParam : model.baseline.temp, 0, 60);
+    const initialTemperature = hasCurrent ? model.baseline.temp : hasLegacy ? clamp(legacyParam, 18, 34) : model.baseline.temp;
+    const initialView = ["energy", "exposure"].includes(params.get("view")) ? params.get("view") : "energy";
+    const initialMoment = ["day", "night"].includes(params.get("moment")) ? params.get("moment") : "day";
+    const state = {
+      view: initialView,
+      temperature: initialTemperature,
+      profile: "mixed",
+      moment: initialMoment,
+      measures: { P4: false, P5: false, P6: false },
+      playing: !reducedMotion,
+      phase: 0
+    };
+    const profileLabels = {
+      dark: "Superficies oscuras: mayor absorción y almacenamiento cualitativo.",
+      reflective: "Superficies reflectivas: una fracción mayor de la radiación vuelve al entorno.",
+      vegetated: "Cobertura vegetada: sombra y evapotranspiración dominan la ilustración.",
+      mixed: "Perfil mixto: combina superficies duras, reflectivas y vegetadas."
+    };
+    let lastScene = { energyArrows: 0, vaporFluxes: 0, windArrows: 0, ozoneMolecules: 0, people: 0, visibleEntities: [] };
+
+    function selectedMeasures() {
+      return Object.keys(state.measures).filter(code => state.measures[code]);
+    }
+
+    function experiment() {
+      return model.evaluateTemperatureExperiment({ temperatureC: state.temperature, measures: selectedMeasures() });
+    }
+
+    function energyScene(result) {
+      const day = state.moment === "day";
+      const profile = state.profile;
+      const p4 = state.measures.P4;
+      const p5 = state.measures.P5;
+      const p6 = state.measures.P6;
+      const phaseWave = Math.sin(state.phase * Math.PI * 2);
+      const surfaceColor = profile === "dark" ? "#343b3f" : profile === "reflective" ? "#d8d6c8" : profile === "vegetated" ? "#7fb66d" : "#756f65";
+      const roofColor = profile === "reflective" ? "#f0ead4" : profile === "vegetated" ? "#75ad68" : "#565c60";
+      const treeCount = profile === "vegetated" ? 5 : profile === "dark" ? 1 : 3;
+      const totalTrees = treeCount + (p5 ? 3 : 0);
+      const energyArrows = day ? (profile === "dark" ? 8 : profile === "reflective" ? 5 : 6) : 5;
+      const vaporFluxes = day && (profile === "vegetated" || profile === "mixed" || p5) ? totalTrees : 0;
+      const windArrows = p6 ? 5 : 2;
+      const rays = Array.from({ length: energyArrows }, (_, index) => {
+        const x = 88 + index * 74;
+        const endY = 252 + ((index % 2) * 34);
+        const offset = phaseWave * (3 + index % 3);
+        if (day) return `<path d="M${x} 82 L${x + 18 + offset} ${endY}" stroke="#e7a42d" stroke-width="4" opacity=".72" marker-end="url(#temp-arrow-warm)"/>`;
+        return `<path d="M${x} ${endY} C${x - 8} ${210 - offset} ${x + 10} 170 ${x + 2} 132" fill="none" stroke="#d36a43" stroke-width="4" opacity=".68" marker-end="url(#temp-arrow-warm)"/>`;
+      }).join("");
+      const reflectionCount = day && profile === "reflective" ? 5 : day ? 2 : 0;
+      const reflections = Array.from({ length: reflectionCount }, (_, index) => {
+        const x = 285 + index * 62;
+        return `<path d="M${x} 253 L${x + 12} ${128 + phaseWave * 4}" stroke="#f4d477" stroke-width="3" stroke-dasharray="8 7" marker-end="url(#temp-arrow-light)"/>`;
+      }).join("");
+      const treesMarkup = Array.from({ length: totalTrees }, (_, index) => tree(375 + (index % 6) * 53, 292 - Math.floor(index / 6) * 50, .62)).join("");
+      const vapor = Array.from({ length: vaporFluxes }, (_, index) => {
+        const progress = (state.phase + index / Math.max(1, vaporFluxes)) % 1;
+        const x = 376 + (index % 6) * 53;
+        const y = 226 - progress * 82;
+        return `<circle cx="${x}" cy="${y.toFixed(1)}" r="${3 + index % 2}" fill="#55aeb1" opacity="${(.25 + progress * .45).toFixed(2)}"/>`;
+      }).join("");
+      const wind = Array.from({ length: windArrows }, (_, index) => {
+        const x = 80 + ((state.phase * 190 + index * 126) % 570);
+        const y = 128 + index * 27;
+        return `<path d="M${x.toFixed(1)} ${y}h52" stroke="#4b9eb1" stroke-width="3" stroke-linecap="round" marker-end="url(#temp-arrow-air)" opacity="${p6 ? .82 : .35}"/>`;
+      }).join("");
+      const vehicles = p4 ? `${car(90, 306, "#3d8d70", .62)}<g transform="translate(175 320)"><circle cx="0" cy="13" r="11" fill="none" stroke="#234b60" stroke-width="3"/><circle cx="43" cy="13" r="11" fill="none" stroke="#234b60" stroke-width="3"/><path d="m0 13 17-22 13 22H0m17-22 26 22m-13 0 10-31" fill="none" stroke="#234b60" stroke-width="3"/></g>` : `${car(70, 307, "#be3a34", .72)}${car(155, 316, "#d9822b", .62)}`;
+      const sky = day ? "#dff1f5" : "#1d334d";
+      const labelColor = day ? "#28434f" : "#edf5f6";
+      const svg = svgFrame(`${day ? "Balance diurno" : "Liberación nocturna"} de energía en un perfil urbano ${profile}`, `
+        <defs><marker id="temp-arrow-warm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#d36a43"/></marker><marker id="temp-arrow-light" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#f4d477"/></marker><marker id="temp-arrow-air" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#4b9eb1"/></marker></defs>
+        <rect width="720" height="400" fill="${sky}"/>${day ? `<circle cx="644" cy="63" r="34" fill="#f0c75e"/><text x="644" y="68" text-anchor="middle" font-size="10" font-weight="900" fill="#765900">SOL</text>` : `<circle cx="644" cy="63" r="27" fill="#f0ead4"/><circle cx="655" cy="53" r="27" fill="${sky}"/>`}
+        <text x="28" y="38" font-size="12" font-weight="900" fill="${labelColor}">${day ? "ENTRADA, REFLEXIÓN Y ALMACENAMIENTO" : "LIBERACIÓN DE ENERGÍA ALMACENADA"}</text>
+        ${rays}${reflections}${wind}
+        <g transform="translate(0 8)">${buildings(302)}</g><rect y="302" width="720" height="98" fill="${surfaceColor}"/><rect x="270" y="251" width="96" height="51" fill="${roofColor}" opacity=".96"/>
+        ${vehicles}${treesMarkup}${vapor}
+        <g transform="translate(26 267)"><rect width="164" height="31" rx="10" fill="#fff" opacity=".92"/><text x="82" y="20" text-anchor="middle" font-size="10" font-weight="900" fill="#633d2c">AIRE: ${fmt(result.temperatureAfter, 1)} °C</text></g>
+        <g transform="translate(496 329)"><rect width="194" height="48" rx="12" fill="#fff" opacity=".94"/><text x="97" y="18" text-anchor="middle" font-size="9" font-weight="900" fill="#5c6970">PERFIL VISUAL</text><text x="97" y="34" text-anchor="middle" font-size="10" fill="#3f555f">${profile === "dark" ? "oscuro" : profile === "reflective" ? "reflectivo" : profile === "vegetated" ? "vegetado" : "mixto"} · ${day ? "día" : "noche"}</text></g>
+      `, sky);
+      return { svg, energyArrows, vaporFluxes, windArrows, ozoneMolecules: 0, people: 0, visibleEntities: [day ? "sol" : "luna", "edificios", "superficie", p4 ? "movilidad activa" : "vehículos", ...(p5 ? ["arborización P5"] : []), ...(p6 ? ["corredor P6"] : [])] };
+    }
+
+    function exposureScene(result) {
+      const day = state.moment === "day";
+      const p5 = state.measures.P5;
+      const p6 = state.measures.P6;
+      const ozoneCount = Math.round(clamp(ratio(result.ozoneAfter, 16, 28), 0, 1) * 13 + 5);
+      const windArrows = p6 ? 7 : 3;
+      const shadeWidth = p5 || state.profile === "vegetated" ? 185 : state.profile === "dark" ? 55 : 105;
+      const ozone = Array.from({ length: ozoneCount }, (_, index) => {
+        const progress = (state.phase * .62 + index / ozoneCount) % 1;
+        const x = 390 + ((index * 47 + progress * 180) % 275);
+        const y = 92 + ((index * 31) % 132) + Math.sin((progress + index) * Math.PI * 2) * 4;
+        return `<g class="temperature-o3" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="8" fill="#d9822b" opacity=".82"/><text y="3" text-anchor="middle" font-size="6.5" font-weight="900" fill="#fff">O₃</text></g>`;
+      }).join("");
+      const wind = Array.from({ length: windArrows }, (_, index) => {
+        const x = 55 + ((state.phase * 220 + index * 103) % 570);
+        const y = 245 + (index % 3) * 24;
+        return `<path d="M${x.toFixed(1)} ${y}h48" stroke="#4b9eb1" stroke-width="3" marker-end="url(#temp-air-arrow)" opacity="${p6 ? .82 : .38}"/>`;
+      }).join("");
+      const person = (x, sheltered) => `<g transform="translate(${x} 267)"><circle cx="0" cy="-37" r="12" fill="#d7a88d"/><path d="M0-24v42m0-23-18 19m18-19 18 19M0 18-15 49m15-31 16 31" fill="none" stroke="${sheltered ? "#2f765f" : "#79473c"}" stroke-width="7" stroke-linecap="round"/><text x="0" y="66" text-anchor="middle" font-size="8" font-weight="900" fill="#536773">${sheltered ? "SOMBRA" : "SOL"}</text></g>`;
+      const svg = svgFrame("Temperatura del aire, exposición al calor y respuesta secundaria simplificada de ozono", `
+        <defs><linearGradient id="temp-exposure-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${day ? "#dcedf3" : "#243b55"}"/><stop offset="1" stop-color="${day ? "#fff0cc" : "#50647a"}"/></linearGradient><marker id="temp-air-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#4b9eb1"/></marker></defs><rect width="720" height="400" fill="url(#temp-exposure-sky)"/>
+        <path d="M350 30v340" stroke="#b9c9ce" stroke-width="2" stroke-dasharray="8 8"/><text x="28" y="38" font-size="12" font-weight="900" fill="${day ? "#79473c" : "#fff"}">EXPOSICIÓN TÉRMICA</text><text x="384" y="38" font-size="12" font-weight="900" fill="${day ? "#87581f" : "#fff"}">RESPUESTA SECUNDARIA DE O₃</text>
+        ${day ? `<circle cx="300" cy="72" r="29" fill="#f0c75e"/>` : `<circle cx="300" cy="72" r="23" fill="#f0ead4"/>`}<rect y="316" width="350" height="84" fill="#d8d0ba"/><path d="M28 316h${shadeWidth}l-28-104H28z" fill="#477b63" opacity=".26"/>
+        ${tree(84, 287, .82)}${person(118, true)}${person(264, false)}${wind}
+        <g transform="translate(24 70)"><rect width="174" height="54" rx="13" fill="#fff" opacity=".94"/><text x="87" y="20" text-anchor="middle" font-size="9" font-weight="900" fill="#6d4a3e">TEMPERATURA DEL AIRE</text><text x="87" y="42" text-anchor="middle" font-size="21" font-weight="900" fill="#b94734">${fmt(result.temperatureAfter, 1)} °C</text></g>
+        ${ozone}<g transform="translate(382 255)"><rect width="304" height="92" rx="14" fill="#fff" opacity=".94"/><text x="152" y="20" text-anchor="middle" font-size="9" font-weight="900" fill="#75561f">MODELO QUÍMICO SIMPLIFICADO</text><text x="152" y="46" text-anchor="middle" font-size="18" font-weight="900" fill="#9d5722">${fmt(result.ozoneBefore, 1)} → ${fmt(result.ozoneAfter, 1)} ppb</text><text x="152" y="67" text-anchor="middle" font-size="9" fill="#586b73">requiere también NOx, COV y radiación</text><text x="152" y="82" text-anchor="middle" font-size="8" fill="#6c7377">No es un pronóstico atmosférico</text></g>
+      `, "#edf3f2");
+      return { svg, energyArrows: 0, vaporFluxes: 0, windArrows, ozoneMolecules: ozoneCount, people: 2, visibleEntities: ["persona en sombra", "persona expuesta", day ? "sol" : "noche", "módulo O3", ...(p5 ? ["sombra P5"] : []), ...(p6 ? ["ventilación P6"] : [])] };
+    }
+
+    document.title = "Laboratorio de temperatura urbana";
+    document.documentElement.style.setProperty("--accent", "#c44935");
+    document.documentElement.style.setProperty("--scene-tint", "#f8f1ec");
+    document.body.classList.toggle("embedded-resource", embedded);
+    root.className = "resource-shell temperature-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back particulate-close" id="temperature-close" type="button">${embedded ? "← Cerrar laboratorio" : "← Volver al simulador"}</button><span class="resource-tag">Laboratorio de energía urbana</span></nav>
+      <header class="resource-header temperature-header"><div><p class="eyebrow">Meteorología, ciudad y exposición</p><h1>Temperatura urbana: aire, superficies y calor</h1><p class="lead">Distingue la temperatura del aire de la temperatura superficial, observa cómo la ciudad intercambia energía y explora los efectos demostrativos de movilidad activa, arborización y ventilación.</p></div><div class="header-mark temperature-mark" aria-hidden="true">°C</div></header>
+      <section class="temperature-layout" aria-label="Laboratorio de temperatura urbana">
+        <article class="card scene-card temperature-scene-card"><div class="card-head"><div><h2 id="temperature-scene-title"></h2><p id="temperature-scene-note"></p></div><span class="live-badge" id="temperature-animation-badge"></span></div>
+          <div class="temperature-view-tabs" role="tablist" aria-label="Vista del fenómeno"><button type="button" data-temperature-view="energy" role="tab">Superficies y energía</button><button type="button" data-temperature-view="exposure" role="tab">Aire, exposición y química</button></div>
+          <div class="scene temperature-scene" id="temperature-scene"></div><div class="scene-legend" id="temperature-legend"></div>
+          <div class="temperature-context-grid"><article><span>Temperatura actual del simulador</span><strong>${fmt(currentTemperature, 1)} <small>°C</small></strong><small>Estado transferido; el experimento inicia en su propia base.</small></article><article><span>Qué representa</span><strong>Aire urbano exterior</strong><small>No es temperatura superficial, índice de calor, sensación térmica ni pronóstico.</small></article></div>
+        </article>
+        <aside class="card control-card temperature-controls"><div><h2>Experimenta</h2><p class="control-intro">Estas medidas son demostrativas y no modifican tu plan.</p></div>
+          <div class="control-group"><label class="control-label" for="temperature-value"><span>Temperatura experimental</span><span class="control-readout" id="temperature-value-readout"></span></label><input id="temperature-value" type="range" min="18" max="34" step="0.1"><div class="range-labels"><span>18 °C</span><span>34 °C</span></div></div>
+          <div class="temperature-control-row"><div class="control-group"><label class="control-label" for="temperature-profile"><span>Perfil urbano</span></label><select id="temperature-profile" class="select-control"><option value="dark">Impermeable oscuro</option><option value="reflective">Reflectivo</option><option value="vegetated">Vegetado</option><option value="mixed">Mixto</option></select></div><div class="control-group"><label class="control-label" for="temperature-moment"><span>Momento</span></label><select id="temperature-moment" class="select-control"><option value="day">Día</option><option value="night">Noche</option></select></div></div><small class="temperature-profile-note" id="temperature-profile-note"></small>
+          <fieldset class="temperature-measures"><legend>Medidas demostrativas</legend><label><input type="checkbox" data-temperature-measure="P4"><span><strong>P4 · Movilidad activa</strong><small>−0,2 °C</small></span></label><label><input type="checkbox" data-temperature-measure="P5"><span><strong>P5 · Arborización técnica</strong><small>−1,1 °C</small></span></label><label><input type="checkbox" data-temperature-measure="P6"><span><strong>P6 · Corredores de ventilación</strong><small>−0,4 °C</small></span></label></fieldset>
+          <div class="playback-controls"><button type="button" id="temperature-play"></button><button type="button" id="temperature-reset">Restablecer</button></div>
+          <section class="temperature-results" aria-live="polite"><span class="measure-name" id="temperature-measure-name"></span><div class="temperature-result-pair"><article><span>Antes</span><strong id="temperature-before"></strong></article><i aria-hidden="true">→</i><article><span>Después</span><strong id="temperature-after"></strong></article></div><strong class="temperature-change" id="temperature-change"></strong><div class="temperature-ozone-result"><span>Respuesta secundaria de O₃</span><strong id="temperature-ozone"></strong><small id="temperature-ozone-note"></small></div><p class="temperature-method-note">No se asigna un semáforo sanitario con °C solamente: también importan humedad, radiación, viento, duración, actividad y vulnerabilidad.</p></section>
+        </aside>
+      </section>
+      <section class="particulate-info-grid" aria-label="Claves para interpretar temperatura urbana"><article class="card info-card"><span class="info-icon" aria-hidden="true">aire</span><h2>Aire ≠ superficie</h2><p>Una cubierta puede calentarse mucho más que el aire. El laboratorio mantiene separadas ambas magnitudes.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">ΔT</span><h2>Isla de calor</h2><p>Es una diferencia entre zonas urbanas y su entorno, no un umbral universal de temperatura absoluta.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">O₃</span><h2>Una condición más</h2><p>El calor puede favorecer O₃ con sol y precursores suficientes; la temperatura no lo produce por sí sola.</p></article></section>
+      <section class="card temperature-context-card"><div><p class="eyebrow">Interpretación responsable</p><h2>Sin máximo normativo de calidad del aire</h2><p>La Resolución 2254 no fija un máximo para temperatura. La evaluación de calor requiere contexto local y variables adicionales; aquí se comparan relaciones didácticas.</p></div><div class="temperature-context-facts"><article><strong>Día</strong><span>Radiación, reflexión, almacenamiento, sombra y evapotranspiración.</span></article><article><strong>Noche</strong><span>Las superficies pueden liberar parte de la energía almacenada durante el día.</span></article></div><div class="standards-links"><a href="https://www.ideam.gov.co/documents/11769/72085840/Anexo%2B10.%2BGlosario%2Bmeteorol%C3%B3gico.pdf" target="_blank" rel="noopener">Glosario meteorológico · IDEAM</a><a href="https://www.epa.gov/heatislands/measuring-heat-islands" target="_blank" rel="noopener">Medición de islas de calor · EPA</a><a href="https://www.who.int/news-room/fact-sheets/detail/climate-change-heat-and-health" target="_blank" rel="noopener">Calor y salud · OMS</a></div></section>`;
+
+    const elements = { scene: document.getElementById("temperature-scene"), badge: document.getElementById("temperature-animation-badge"), temperature: document.getElementById("temperature-value"), profile: document.getElementById("temperature-profile"), moment: document.getElementById("temperature-moment"), play: document.getElementById("temperature-play") };
+
+    function renderScene() {
+      const result = experiment();
+      lastScene = state.view === "energy" ? energyScene(result) : exposureScene(result);
+      elements.scene.innerHTML = lastScene.svg;
+    }
+
+    function render() {
+      const result = experiment();
+      document.querySelectorAll("[data-temperature-view]").forEach(button => {
+        const active = button.dataset.temperatureView === state.view;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.getElementById("temperature-scene-title").textContent = state.view === "energy" ? "Cómo la ciudad intercambia energía" : "Temperatura del aire, exposición y O₃";
+      document.getElementById("temperature-scene-note").textContent = state.view === "energy" ? "Los flujos son cualitativos; la temperatura del aire permanece separada de las superficies." : "La escena muestra factores faltantes y una respuesta química simplificada, no un diagnóstico de salud.";
+      elements.badge.textContent = state.playing ? "En movimiento" : "En pausa";
+      elements.badge.classList.toggle("paused", !state.playing);
+      elements.play.textContent = state.playing ? "Pausar animación" : "Reproducir animación";
+      elements.temperature.value = state.temperature;
+      elements.profile.value = state.profile;
+      elements.moment.value = state.moment;
+      document.getElementById("temperature-value-readout").textContent = `${fmt(state.temperature, 1)} °C`;
+      document.getElementById("temperature-profile-note").textContent = profileLabels[state.profile];
+      document.querySelectorAll("[data-temperature-measure]").forEach(input => { input.checked = state.measures[input.dataset.temperatureMeasure]; });
+      const selected = selectedMeasures();
+      document.getElementById("temperature-measure-name").textContent = selected.length ? selected.join(" + ") : "Sin medida";
+      document.getElementById("temperature-before").textContent = `${fmt(result.temperatureBefore, 1)} °C`;
+      document.getElementById("temperature-after").textContent = `${fmt(result.temperatureAfter, 1)} °C`;
+      const change = document.getElementById("temperature-change");
+      change.textContent = Math.abs(result.difference) < .0001 ? "Sin cambio" : result.difference < 0 ? `Reducción de ${fmt(Math.abs(result.difference), 1)} °C` : `Aumento de ${fmt(result.difference, 1)} °C`;
+      change.className = `temperature-change ${result.difference < 0 ? "decrease" : result.difference > 0 ? "increase" : "stable"}`;
+      const ozoneSign = result.ozoneChangePercent > 0 ? "+" : "";
+      document.getElementById("temperature-ozone").textContent = `${fmt(result.ozoneBefore, 1)} → ${fmt(result.ozoneAfter, 1)} ppb (${ozoneSign}${fmt(result.ozoneChangePercent, 1)} %)`;
+      document.getElementById("temperature-ozone").className = result.ozoneChangePercent > .05 ? "increase" : result.ozoneChangePercent < -.05 ? "decrease" : "stable";
+      document.getElementById("temperature-ozone-note").textContent = state.temperature > model.baseline.temp ? "La temperatura aporta al resultado junto con NOx, COV y ventilación." : selected.includes("P6") ? "P6 reduce O₃ en el modelo por el aumento de ventilación, no solo por temperatura." : "Por debajo de la base, la regla actual no añade un factor térmico de O₃.";
+      document.getElementById("temperature-legend").innerHTML = state.view === "energy" ? `<span class="legend-item"><i class="legend-dot" style="--dot:#e7a42d"></i>Radiación</span><span class="legend-item"><i class="legend-dot" style="--dot:#d36a43"></i>Calor almacenado/liberado</span><span class="legend-item"><i class="legend-dot" style="--dot:#55aeb1"></i>Evapotranspiración y aire</span>` : `<span class="legend-item"><i class="legend-dot" style="--dot:#477b63"></i>Sombra</span><span class="legend-item"><i class="legend-dot" style="--dot:#4b9eb1"></i>Ventilación</span><span class="legend-item"><i class="legend-dot" style="--dot:#d9822b"></i>O₃ simplificado</span>`;
+      renderScene();
+    }
+
+    const viewButtons = [...document.querySelectorAll("[data-temperature-view]")];
+    viewButtons.forEach((button, index) => {
+      button.addEventListener("click", () => { state.view = button.dataset.temperatureView; render(); });
+      button.addEventListener("keydown", event => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const next = viewButtons[(index + direction + viewButtons.length) % viewButtons.length];
+        state.view = next.dataset.temperatureView;
+        render();
+        next.focus();
+      });
+    });
+    elements.temperature.addEventListener("input", () => { state.temperature = Number(elements.temperature.value); render(); });
+    elements.profile.addEventListener("change", () => { state.profile = elements.profile.value; render(); });
+    elements.moment.addEventListener("change", () => { state.moment = elements.moment.value; render(); });
+    document.querySelectorAll("[data-temperature-measure]").forEach(input => input.addEventListener("change", () => { state.measures[input.dataset.temperatureMeasure] = input.checked; render(); }));
+    elements.play.addEventListener("click", () => { state.playing = !state.playing; render(); });
+    document.getElementById("temperature-reset").addEventListener("click", () => { Object.assign(state, { view: "energy", temperature: model.baseline.temp, profile: "mixed", moment: "day", playing: !reducedMotion, phase: 0 }); state.measures = { P4: false, P5: false, P6: false }; render(); });
+    document.getElementById("temperature-close").addEventListener("click", () => {
+      if (embedded && window.parent !== window) window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      else if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) history.back();
+      else location.href = "index.html";
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && embedded && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      }
+    });
+
+    function renderResourceToText() {
+      const result = experiment();
+      return JSON.stringify({
+        resource: "temp",
+        view: state.view,
+        coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
+        current: { airTemperatureC: Number(currentTemperature.toFixed(2)), meaning: "temperatura urbana exterior representativa" },
+        experiment: { beforeC: Number(result.temperatureBefore.toFixed(3)), afterC: Number(result.temperatureAfter.toFixed(3)), differenceC: Number(result.difference.toFixed(3)), status: result.status },
+        profile: state.profile,
+        moment: state.moment,
+        measures: selectedMeasures(),
+        chemistry: { noxPpb: Number(result.values.nox.toFixed(3)), covUgM3: Number(result.values.cov.toFixed(3)), windMs: Number(result.values.wind.toFixed(3)), ozoneBeforePpb: Number(result.ozoneBefore.toFixed(3)), ozoneAfterPpb: Number(result.ozoneAfter.toFixed(3)), ozoneChangePercent: Number(result.ozoneChangePercent.toFixed(2)), temperatureFactorBeforePercent: Number((result.ozoneFactorsBefore.temperature * 100).toFixed(1)), temperatureFactorAfterPercent: Number((result.ozoneFactorsAfter.temperature * 100).toFixed(1)) },
+        interpretation: { surfaceTemperatureShownAsMeasurement: false, healthThreshold: null, missingHeatStressFactors: ["humedad", "radiación", "viento", "duración", "actividad", "vulnerabilidad"] },
+        animation: { playing: state.playing, phase: Number(state.phase.toFixed(3)) },
+        visible: { energyArrows: lastScene.energyArrows, vaporFluxes: lastScene.vaporFluxes, windArrows: lastScene.windArrows, ozoneMolecules: lastScene.ozoneMolecules, people: lastScene.people, entities: lastScene.visibleEntities }
+      });
+    }
+
+    window.RESOURCE = { kind: "temperature-energy-exposure-chemistry" };
+    window.render_resource_to_text = renderResourceToText;
+    window.render_game_to_text = renderResourceToText;
+    window.advanceTime = ms => {
+      if (state.playing) state.phase = (state.phase + Math.max(0, Number(ms) || 0) / 6000) % 1;
+      renderScene();
+      return renderResourceToText();
+    };
+    let lastFrame = performance.now();
+    function animateTemperature(now) {
+      const delta = Math.min(50, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      if (state.playing) {
+        state.phase = (state.phase + delta / 6000) % 1;
+        renderScene();
+      }
+      requestAnimationFrame(animateTemperature);
+    }
+    render();
+    if (!window.__vt_pending) requestAnimationFrame(animateTemperature);
+  }
+
   const key = document.body.dataset.resource;
   const root = document.getElementById("resource-app");
   if (!root) return;
@@ -1853,6 +2114,11 @@
 
   if (key === "cov") {
     renderCovLab(root);
+    return;
+  }
+
+  if (key === "temp") {
+    renderTemperatureLab(root);
     return;
   }
 

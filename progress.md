@@ -208,3 +208,15 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Plan previsto: perfiles urbanos explicativos, día/noche, P4/P5/P6 combinables, O₃ secundario, animación determinista, integración en diálogo, favicon, estado textual completo y nota metodológica en reporte.
 - El plan completo, controles, resultados esperados, aceptación y fuentes oficiales quedaron registrados en `CRITERIOS_LABS_EDUCATIVOS.md`.
 - Pendiente: implementar únicamente cuando el usuario lo solicite de forma explícita.
+- Implementación iniciada: `modelo-nox.js` incorpora `evaluateTemperatureExperiment()` para P4/P5/P6 combinables y respuesta de O₃ antes/después desde una sola fuente de coeficientes.
+- Implementación inicial: Temperatura dispone de vistas de superficies/energía y aire/exposición/química, rango 18–34 °C, cuatro perfiles urbanos, día/noche, tres medidas, resultados y animación determinista.
+- Integración inicial: la tarjeta Temperatura abre el diálogo con `current`, la ruta directa conserva `value`, se añadió favicon y el reporte explica el significado de la métrica.
+- Verificación funcional final: sin parámetros, `current`, `value` y su precedencia conservan la semántica prevista; 18/25,7/30/34 °C ya no se recortan ni se convierten en cobertura verde.
+- Verificación de políticas: las ocho combinaciones de P4/P5/P6 coinciden con `evaluateTemperatureExperiment()`; desde 25,7 °C producen 25,7/25,5/24,6/25,3/24,4/25,1/24,2/24,0 °C.
+- Verificación química: a 30 °C, O₃ inicia en 22,806 ppb y P5 reduce temperatura a 28,9 °C y O₃ a 22,139 ppb; P6 conserva su efecto compartido de ventilación.
+- Verificación determinista: 600 ms avanzan aproximadamente 0,1 de fase al reproducir; pausa conserva fase y SVG, restablecer recupera base/vista/perfil/momento/medidas y movimiento reducido inicia y restablece en pausa.
+- Verificación integrada: con P5 implementada, 25 puntos usados y año/historial conocidos, cierre interno, Escape, botón externo y mensaje conservan exactamente el estado y restauran el foco a Temperatura.
+- Verificación visual y accesible: vistas de energía y exposición revisadas en 1280×900 y exposición nocturna en 390×844; pestañas por flechas, sin entidades fuera del `viewBox`, desbordamiento, errores de consola ni solicitudes fallidas.
+- Verificación de reporte: la salida final incluye la nota que define temperatura exterior representativa y descarta temperatura superficial, índice de calor, sensación térmica y pronóstico.
+- Regresión final: el cliente determinista oficial confirmó PM2.5/PM10, CO₂, NOx, O₃, COV y Viento; la auditoría conserva 370 combinaciones y 39 planes aceptables.
+- Pendientes conocidos: ninguno dentro del alcance del laboratorio de Temperatura.
