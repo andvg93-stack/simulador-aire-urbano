@@ -192,3 +192,19 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación de reporte: la tabla conserva COV en µg/m³ y añade una nota visible que define la mezcla equivalente y descarta una clasificación sanitaria agregada.
 - Regresión final: el cliente determinista oficial confirmó PM2.5, CO₂, NOx, O₃, COV y el recurso genérico de temperatura; la auditoría mantiene 370 combinaciones y 39 planes aceptables.
 - Pendientes conocidos: ninguno dentro del alcance del laboratorio de COV.
+
+## Auditoría y plan del laboratorio de Temperatura
+
+- Rama de trabajo: `codex/recurso-temperatura`.
+- Alcance de esta iteración: auditoría funcional, visual y científica, seguida de plan documentado; el recurso de Temperatura todavía no se modificó.
+- Auditoría Playwright: `?value=25.7` muestra 25,7 °C, el deslizador responde y no hay desbordamiento horizontal en 390×844.
+- Hallazgo crítico de datos: `?value=18` muestra 22 °C y `?value=34` muestra 29 °C. La ruta heredada solo conserva valores dentro de 22–29 °C y recorta silenciosamente el rango 18–34 del simulador.
+- Hallazgo conceptual: el recurso convierte temperatura en cobertura verde mediante una relación fija y después recalcula la temperatura; confunde condición meteorológica, cobertura urbana, temperatura del aire y temperatura superficial.
+- Hallazgo funcional: “En vivo” es estático; `advanceTime(5000)` no cambia SVG ni estado, y no existen reproducir, pausar o restablecer.
+- Hallazgo crítico de integración: Temperatura aún navega directamente y volver recarga `index.html`, por lo que no puede preservar políticas, presupuesto, año e historial.
+- Hallazgo de modelo: no utiliza P4=−0,2 °C, P5=−1,1 °C y P6=−0,4 °C ni la respuesta térmica secundaria de O₃ compartida por el simulador.
+- Hallazgo sanitario: las categorías bajo/intermedio/alto salen de tercios arbitrarios de cobertura. La OMS señala que el estrés térmico también depende de humedad, viento, radiación, duración, actividad y vulnerabilidad; no se definirá un semáforo a partir de °C solamente.
+- Decisión de plan: mantener temperatura exterior representativa en °C, separar valor actual de experimento, distinguir aire/superficie/isla de calor y crear vistas de energía urbana y exposición/química.
+- Plan previsto: perfiles urbanos explicativos, día/noche, P4/P5/P6 combinables, O₃ secundario, animación determinista, integración en diálogo, favicon, estado textual completo y nota metodológica en reporte.
+- El plan completo, controles, resultados esperados, aceptación y fuentes oficiales quedaron registrados en `CRITERIOS_LABS_EDUCATIVOS.md`.
+- Pendiente: implementar únicamente cuando el usuario lo solicite de forma explícita.

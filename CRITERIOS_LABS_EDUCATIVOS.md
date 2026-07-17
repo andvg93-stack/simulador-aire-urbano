@@ -458,3 +458,126 @@ La interfaz redondeará a una cifra decimal; el estado textual conservará preci
 - [OMS, información sobre exposición a benceno](https://www.who.int/teams/environment-climate-change-and-health/chemical-safety-and-health/health-impacts/chemicals/benzene)
 - [EPA, panorama técnico y diferencias entre COV interiores y exteriores](https://www.epa.gov/indoor-air-quality-iaq/technical-overview-volatile-organic-compounds)
 - [EPA, definición regulatoria y diferencias de reactividad fotoquímica](https://www.epa.gov/air-emissions-inventories/what-definition-voc)
+
+---
+
+# Auditoría y plan específico: temperatura urbana
+
+## Diagnóstico del recurso actual
+
+La revisión del código, el estado textual y las capturas de Playwright en 1280×900 y 390×844 confirmaron:
+
+- Correcto: `?value=25.7` termina mostrando 25,7 °C; el deslizador responde, la composición general es legible y no existe desbordamiento horizontal en 390×844.
+- Defectuoso: la compatibilidad solo funciona accidentalmente dentro del intervalo visual de 22–29 °C. `?value=18` se recorta y muestra 22 °C; `?value=34` se recorta y muestra 29 °C, aunque la tarjeta y el modelo principal trabajan entre 18 y 34 °C.
+- Incorrecto semánticamente: el valor recibido se transforma en cobertura verde mediante `(29 − temperatura) / 0,07`. Por ello una condición meteorológica se convierte silenciosamente en una característica urbana que el simulador nunca midió.
+- Inconsistente: el único control es cobertura verde de 0–100 %, pero su resultado solo recorre 29–22 °C. La relación fija de −7 °C no proviene del modelo principal y no se identifica como un supuesto separado.
+- Defectuoso: la etiqueta “En vivo” describe una escena estática. `advanceTime(5000)` no cambia el SVG ni el estado textual; tampoco existen controles para reproducir, pausar o restablecer.
+- Crítico: Temperatura aún no usa el diálogo educativo. La tarjeta navega a otra página y el enlace de regreso recarga `index.html`, por lo que elimina políticas, presupuesto usado, año e historial.
+- Insuficiente: la escena divide la ciudad en “superficie impermeable” y “cobertura verde”, pero muestra un solo termómetro y un único resultado. No diferencia temperatura del aire, temperatura superficial ni diferencia urbano–entorno, que es la base del concepto de isla de calor.
+- Insuficiente: variar el deslizador cambia el número de árboles, pero no representa balance de energía, sombra móvil, evapotranspiración, reflectancia, almacenamiento diurno ni liberación nocturna de calor.
+- Inconsistente con el simulador: no muestra los efectos exactos de P4 (−0,2 °C), P5 (−1,1 °C) y P6 (−0,4 °C), ni su interacción con la respuesta simplificada de O₃ ya utilizada por el modelo compartido.
+- Incorrecto conceptualmente: “Menor carga térmica / Carga intermedia / Mayor carga térmica” se obtiene de tercios arbitrarios de cobertura verde y aparenta clasificar el riesgo de una temperatura sin considerar humedad, radiación, viento, duración, actividad, adaptación ni vulnerabilidad.
+- Limitado para pruebas: `render_game_to_text()` no informa valor actual transferido, temperatura antes/después, medidas, entorno, vista, momento, O₃, fase ni entidades visibles.
+- Menor: `recurso-temperatura.html` no declara un favicon válido y continúa cargando la ruta genérica sin soporte para `current`, `embedded` o vista inicial.
+
+## Objetivo educativo
+
+El estudiante deberá comprender que:
+
+- La temperatura urbana es una condición meteorológica expresada en °C, no una emisión ni un contaminante criterio.
+- La isla de calor es una diferencia térmica entre áreas urbanizadas y su entorno o entre zonas de la misma ciudad; una temperatura absoluta aislada no demuestra por sí sola que exista una isla de calor.
+- Temperatura del aire y temperatura de la superficie son magnitudes distintas. Asfalto, cubiertas, vegetación y sombra modifican el intercambio de energía, pero no deben presentarse como mediciones equivalentes.
+- Superficies oscuras pueden absorber y almacenar energía durante el día y liberarla después; árboles y vegetación aportan sombra y evapotranspiración; superficies reflectivas absorben menos radiación.
+- Reducir la carga térmica urbana no equivale a cambiar instantáneamente el clima regional. Las intervenciones del laboratorio representan efectos didácticos del modelo sobre un escenario urbano común.
+- El impacto del calor sobre las personas depende también de humedad, radiación, viento, duración, esfuerzo, ropa, adaptación y vulnerabilidad. Por tanto, el laboratorio no asignará un semáforo sanitario usando solo °C.
+- En presencia de radiación y precursores adecuados, temperaturas más altas pueden favorecer la formación de O₃; la temperatura no crea ozono por sí sola.
+- P4, P5 y P6 tienen efectos diferentes y acumulables en el simulador: movilidad activa, arborización técnica y corredores de ventilación.
+
+La métrica principal seguirá siendo **temperatura urbana representativa del escenario, en °C**. Se rotulará como valor didáctico exterior y no como temperatura superficial, índice de calor, sensación térmica o pronóstico.
+
+## Contenido visible propuesto
+
+El laboratorio tendrá dos vistas sincronizadas:
+
+1. **Superficies y balance de energía:** cañón urbano con radiación incidente, energía reflejada, almacenamiento en superficies, sombra, evapotranspiración y liberación de calor. Los flujos serán cualitativos y estarán rotulados como representación didáctica.
+2. **Aire, exposición y química:** temperatura del aire en una zona urbana, personas al sol y a la sombra, ventilación y un módulo secundario de O₃. La vista explicará qué variables faltan para evaluar estrés térmico y mostrará la respuesta química simplificada sin convertirla en pronóstico.
+
+Ambas vistas mostrarán:
+
+- Temperatura actual transferida desde el simulador, separada de la base experimental de 25,7 °C para evitar aplicar dos veces una política ya implementada.
+- Temperatura experimental antes y después, diferencia absoluta en °C y cambio respecto de la base experimental.
+- P4, P5 y P6 visibles como intervenciones demostrativas, con los mismos efectos del simulador.
+- O₃ antes/después en ppb y el factor atribuible a temperatura según `NoxModel.ozoneResponse`, siempre acompañado de NOx, COV y radiación como condiciones necesarias.
+- Perfiles de superficie —impermeable oscura, reflectiva, vegetada y mixta— que cambian la ilustración y la explicación, pero no alteran silenciosamente la temperatura experimental.
+- Comparación día/noche que cambia los flujos visuales de absorción y liberación de energía, conservando las cifras hasta que el estudiante modifique una variable o medida.
+- Nota permanente: la Resolución 2254 de 2017 no define un máximo de calidad del aire para temperatura; las alertas de calor requieren criterios locales y más variables que la temperatura del aire.
+
+No habrá estados “bajo/intermedio/alto”. El resultado se expresará como “sin cambio”, “reducción de X °C” o “aumento de X °C respecto al escenario experimental”. La sección de exposición enumerará los factores faltantes y remitirá a alertas oficiales, sin inventar umbrales sanitarios.
+
+## Controles y comportamiento esperado
+
+| Control | Opciones | Resultado visible esperado |
+|---|---|---|
+| Vista | Superficies y energía; Aire, exposición y química | Cambia la escena sin reiniciar temperatura, perfil, momento, medidas ni fase. |
+| Temperatura experimental | 18–34 °C, paso 0,1; inicio 25,7 °C | Cambia el termómetro, la intensidad térmica y la respuesta secundaria de O₃; no modifica perfil, momento ni medidas. |
+| Perfil urbano | Impermeable oscuro; Reflectivo; Vegetado; Mixto | Cambia superficies, sombra, reflectancia y explicación; no asigna por sí solo una temperatura oculta. |
+| Momento | Día; Noche | Durante el día destaca radiación, reflexión, sombra y evapotranspiración; de noche destaca liberación de energía almacenada. No altera silenciosamente la cifra. |
+| Medidas demostrativas | P4, P5 y P6 como controles independientes | Aplica respectivamente −0,2, −1,1 y −0,4 °C; las combinaciones suman los mismos efectos que el simulador y cambian los elementos urbanos asociados. |
+| Reproducir/pausar | Estado binario | Anima radiación, flujos de calor, evapotranspiración, aire y química; al pausar conserva exactamente el fotograma. |
+| Restablecer | Acción | Recupera vista de superficies, 25,7 °C, perfil mixto, momento diurno, ninguna medida y fase cero; respeta movimiento reducido. |
+
+## Reglas del modelo que debe reproducir
+
+Se añadirá al modelo compartido una función pura `evaluateTemperatureExperiment({ temperatureC, measures })`. Los efectos se obtendrán de los mismos coeficientes usados por `index.html`; no habrá una segunda tabla numérica dentro del recurso.
+
+Con base experimental de 25,7 °C:
+
+| Medidas | Temperatura después | Diferencia |
+|---|---:|---:|
+| Ninguna | 25,7 °C | 0,0 °C |
+| P4 | 25,5 °C | −0,2 °C |
+| P5 | 24,6 °C | −1,1 °C |
+| P6 | 25,3 °C | −0,4 °C |
+| P4 + P5 | 24,4 °C | −1,3 °C |
+| P4 + P6 | 25,1 °C | −0,6 °C |
+| P5 + P6 | 24,2 °C | −1,5 °C |
+| P4 + P5 + P6 | 24,0 °C | −1,7 °C |
+
+La respuesta de O₃ reutilizará `ozoneResponse` con NOx, COV y viento de referencia. En el modelo actual, solo la temperatura por encima de 25,7 °C añade un factor de +3 % de O₃ por cada °C; no se extrapolará esta simplificación como relación atmosférica universal. Por ejemplo, 30,0 °C produce 22,806 ppb desde una base de 20,2 ppb, mientras P5 reduce el escenario a 28,9 °C y 22,139 ppb. La interfaz redondeará temperatura y O₃ a una cifra decimal; el estado textual conservará precisión suficiente para verificar los coeficientes.
+
+## Implementación e interfaces previstas
+
+- Mantener `recurso-temperatura.html`, añadir favicon válido y cargar `modelo-nox.js` antes de `recurso-didactico.js`.
+- Crear `renderTemperatureLab()` y estilos aislados; la configuración genérica `temp` dejará de renderizar esta ruta.
+- Extender `modelo-nox.js` con el evaluador puro de temperatura, consumiendo `policyEffects` para P4, P5 y P6 y reutilizando `ozoneResponse`.
+- Mantener °C en tarjeta, gráficas y reporte. Añadir al reporte una nota metodológica breve: temperatura exterior representativa, no temperatura superficial, índice de calor ni pronóstico.
+- Aceptar `current=<°C>`, `value=<°C>` como compatibilidad, `view=energy|exposure`, `moment=day|night` y `embedded=1`.
+- Con `current`, mostrar el estado transferido e iniciar el experimento en 25,7 °C. Con `value`, inicializar estado y experimento con el valor heredado. Si aparecen ambos, `current` tendrá precedencia para el estado y el experimento conservará su base independiente.
+- Incorporar Temperatura al diálogo educativo existente, con título y descripción propios. Cerrar mediante botón externo, botón interno, Escape o `educational-resource:close`, conservando año, políticas, presupuesto, historial y estado de simulación, y restaurando el foco a la tarjeta.
+- Implementar una fase determinista de 6000 ms. `advanceTime(ms)` solo avanzará cuando esté reproduciendo; al estar pausado no cambiará estado ni SVG.
+- Ampliar `render_game_to_text()` con vista, coordenadas, temperatura actual, temperatura antes/después, diferencia, perfil, momento, medidas, factores de O₃, reproducción, fase y entidades o flujos visibles.
+- Mantener los SVG dentro del `viewBox`, las pestañas operables con flechas, controles con etiquetas accesibles y estado inicial pausado cuando el sistema solicite movimiento reducido.
+- Registrar implementación, pruebas, resultados y cualquier desviación en `progress.md`.
+
+## Aceptación específica de Temperatura
+
+- Verificar ausencia de parámetros, `current=25.7`, `value=25.7` y precedencia de `current`; el valor transferido nunca se convertirá en cobertura verde.
+- Probar 18, 25,7, 30 y 34 °C, comprobando cifra, termómetro, intensidad y estado textual; 18 y 34 no podrán recortarse a 22 y 29.
+- Comparar P4, P5 y P6 y sus ocho combinaciones contra `evaluateTemperatureExperiment()`; con base 25,7 °C, la combinación completa deberá producir 24,0 °C.
+- Verificar a 30 °C la respuesta secundaria de O₃ antes/después y el efecto de P5, sin presentar la relación como pronóstico ni límite sanitario.
+- Confirmar que cambiar perfil, momento o vista no altera cifras ni reinicia la fase.
+- Verificar reproducción, pausa, restablecimiento, movimiento reducido y `advanceTime`; todos los rayos, flujos, hojas, personas y moléculas permanecerán dentro del `viewBox`.
+- Abrir con P5 seleccionada, 25 puntos usados y un estado conocido de año e historial; cerrar por las cuatro vías y conservar exactamente plan, presupuesto, año e historial, restaurando el foco a Temperatura.
+- Revisar recurso directo y diálogo en 1280×900 y 390×844, navegación por teclado, foco visible, textos accesibles, ausencia de desbordamiento, cero errores de consola y cero solicitudes 404.
+- Ejecutar regresión de PM2.5/PM10, CO₂, NOx, O₃, COV, recursos genéricos restantes, gráficas, reporte y auditoría de las 370 combinaciones de políticas.
+
+## Fuentes primarias y oficiales
+
+- [IDEAM, Glosario meteorológico: definición de isla de calor](https://www.ideam.gov.co/documents/11769/72085840/Anexo%2B10.%2BGlosario%2Bmeteorol%C3%B3gico.pdf)
+- [EPA, efectos de las islas de calor](https://www.epa.gov/heatislands/learn-about-heat-island-effects)
+- [EPA, medición de islas de calor y diferencia entre temperatura del aire y de la superficie](https://www.epa.gov/heatislands/measuring-heat-islands)
+- [EPA, guía de reducción: vegetación, techos y pavimentos fríos](https://www.epa.gov/heatislands/guide-reducing-heat-islands)
+- [EPA, tendencias de ozono ajustadas por condiciones meteorológicas](https://www.epa.gov/air-trends/trends-ozone-adjusted-weather-conditions)
+- [OMS, calor y salud](https://www.who.int/news-room/fact-sheets/detail/climate-change-heat-and-health)
+- [OMS/WMO, guía para sistemas de alerta por calor](https://www.who.int/docs/default-source/climate-change/heat-waves-and-health---guidance-on-warning-system-development.pdf)
+- [Ministerio de Ambiente y Desarrollo Sostenible, Resolución 2254 de 2017](https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf)
