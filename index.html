@@ -774,6 +774,7 @@
 
 <script src="road-layout.js"></script>
 <script src="modelo-nox.js?v=4"></script>
+<script src="modelo-dispersion.js?v=1"></script>
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -792,6 +793,7 @@ function co2IndexToPpm(index) {
   return CO2_DISPLAY_SCALE.minPpm + progress * (CO2_DISPLAY_SCALE.maxPpm - CO2_DISPLAY_SCALE.minPpm);
 }
 
+const baselineDispersion = DispersionModel.calculate(DispersionModel.baseline.wind, DispersionModel.baseline.hmix);
 const baseline = {
   pm25: 67.0,
   pm10: 98.1,
@@ -800,10 +802,10 @@ const baseline = {
   o3: NoxModel.baseline.o3,
   cov: NoxModel.baseline.cov,
   temp: NoxModel.baseline.temp,
-  wind: NoxModel.baseline.wind,
-  hmix: 102,
-  vent: 6,
-  stagnation: 94,
+  wind: DispersionModel.baseline.wind,
+  hmix: DispersionModel.baseline.hmix,
+  vent: baselineDispersion.ventilation,
+  stagnation: baselineDispersion.stagnation,
   exposure: 78000,
   vulnerable: 18000,
   acceptance: 70,
@@ -922,6 +924,15 @@ function particulateResourceUrl(focus, values, embedded = false) {
 
 function educationalResourceUrl(resource, values, embedded = false) {
   if (resource === "pm25" || resource === "pm10") return particulateResourceUrl(resource, values, embedded);
+  if (["wind", "hmix", "vent", "stagnation"].includes(resource)) {
+    const params = new URLSearchParams({
+      focus: resource,
+      wind: Number(values.wind).toFixed(2),
+      hmix: Number(values.hmix).toFixed(1)
+    });
+    if (embedded) params.set("embedded", "1");
+    return `recurso-dispersion-atmosferica.html?${params.toString()}`;
+  }
   const current = resource === "nox" ? values.nox : resource === "o3" ? values.o3 : resource === "cov" ? values.cov : resource === "temp" ? values.temp : values.co2;
   const params = new URLSearchParams({ current: Number(current).toFixed(1) });
   if (embedded) params.set("embedded", "1");
@@ -938,7 +949,8 @@ function openEducationalResource(resource, trigger) {
   const ozone = resource === "o3";
   const cov = resource === "cov";
   const temperature = resource === "temp";
-  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : nox ? "Laboratorio de NOx y ozono" : ozone ? "Laboratorio de ozono troposférico" : cov ? "Laboratorio de compuestos orgánicos volátiles" : temperature ? "Laboratorio de temperatura urbana" : "Laboratorio de emisiones de CO₂";
+  const dispersion = ["wind", "hmix", "vent", "stagnation"].includes(resource);
+  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : nox ? "Laboratorio de NOx y ozono" : ozone ? "Laboratorio de ozono troposférico" : cov ? "Laboratorio de compuestos orgánicos volátiles" : temperature ? "Laboratorio de temperatura urbana" : dispersion ? "Laboratorio de dispersión atmosférica" : "Laboratorio de emisiones de CO₂";
   educationalResourceDescription.textContent = particulate
     ? "Compara PM2.5 y PM10 sin modificar tu plan ambiental."
     : nox
@@ -949,8 +961,10 @@ function openEducationalResource(resource, trigger) {
           ? "Distingue fuentes, concentración, exposición y efectos secundarios sin modificar tu plan."
           : temperature
             ? "Explora energía urbana, temperatura del aire, exposición y química sin modificar tu plan."
+            : dispersion
+              ? "Relaciona viento, mezcla, ventilación y estancamiento sin modificar tu plan."
             : "Distingue emisiones urbanas y concentración atmosférica sin modificar tu plan.";
-  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : nox ? "Laboratorio de NOx, NO₂ y formación de ozono" : ozone ? "Laboratorio de formación, transporte y exposición a ozono" : cov ? "Laboratorio de fuentes, control y destino de COV" : temperature ? "Laboratorio de temperatura, energía urbana y exposición" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
+  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : nox ? "Laboratorio de NOx, NO₂ y formación de ozono" : ozone ? "Laboratorio de formación, transporte y exposición a ozono" : cov ? "Laboratorio de fuentes, control y destino de COV" : temperature ? "Laboratorio de temperatura, energía urbana y exposición" : dispersion ? "Laboratorio de transporte, mezcla, ventilación y estancamiento" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
   educationalResourceFrame.src = educationalResourceUrl(resource, values, true);
   if (!educationalResourceDialog.open) educationalResourceDialog.showModal();
   educationalResourceClose.focus();
@@ -1043,8 +1057,9 @@ function calculateValues(year) {
   const wind = baseline.wind * clamp(1 + sums.wind, 0.55, 1.65);
   const hmix = baseline.hmix * clamp(1 + sums.hmix, 0.8, 1.45);
   const exposure = baseline.exposure * clamp(1 + sums.exposure, 0.35, 1.05);
-  const vent = clamp(baseline.vent + ((wind / baseline.wind - 1) * 58) + ((hmix / baseline.hmix - 1) * 34) + (Math.max(0, -sums.pm25) * 32), 0, 100);
-  const stagnation = clamp(100 - vent, 0, 100);
+  const dispersion = DispersionModel.calculate(wind, hmix);
+  const vent = dispersion.ventilation;
+  const stagnation = dispersion.stagnation;
 
   const ozone = NoxModel.ozoneResponse({ nox, cov, temp, wind }, NoxModel.baseline);
   const o3 = clamp(ozone.value, 6, 90);
@@ -1307,7 +1322,7 @@ function updateDashboard(rawValues) {
       card.dataset.param = def.key;
       card.title = `Abrir recurso didáctico de ${def.label}`;
       card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
-      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp") {
+      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation") {
         card.addEventListener("click", event => {
           event.preventDefault();
           openEducationalResource(def.key, card);
@@ -1316,7 +1331,7 @@ function updateDashboard(rawValues) {
       grid.appendChild(card);
     }
     card.querySelector("span").textContent = def.label;
-    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp"
+    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation"
       ? educationalResourceUrl(def.key, rawValues)
       : `${def.resource}?value=${encodeURIComponent(value)}`;
     card.querySelector("strong").textContent = fmt(displayValue, def.digits);
@@ -3130,7 +3145,7 @@ window.render_game_to_text = () => JSON.stringify({
   },
   metrics: (() => {
     const values = calculateValues(currentYear);
-    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, co2Index: values.co2, co2Ppm: Number(co2IndexToPpm(values.co2).toFixed(1)), nox: values.nox, o3: values.o3, cov: values.cov, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
+    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, co2Index: values.co2, co2Ppm: Number(co2IndexToPpm(values.co2).toFixed(1)), nox: values.nox, o3: values.o3, cov: values.cov, wind: values.wind, hmix: values.hmix, ventilationRate: values.wind * values.hmix, vent: values.vent, stagnation: values.stagnation, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
   })()
 });
 

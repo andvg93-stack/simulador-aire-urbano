@@ -1,6 +1,6 @@
 # Auditoria de balance de politicas
 
-Generado: 2026-07-15T20:48:45.549Z
+Generado: 2026-08-05T16:12:43.016Z
 
 ## Resumen
 
@@ -54,7 +54,7 @@ Generado: 2026-07-15T20:48:45.549Z
 - OK: P8 reduce COV sin disparar O3. COV 35,0%, O3 17,8 ppb al efecto completo; al ano 5 COV 23,8%.
 - OK: P10 mejora exposicion sin reducir emisiones. Exposicion 18,0%, PM2.5 0,0%, NOx 0,0% al efecto completo.
 - OK: P10 no maquilla planes sin reduccion minima de emisiones. Ningun plan aceptable depende de P10 para ocultar emisiones insuficientes.
-- OK: P6 mejora ventilacion y estancamiento. Vent 25 vs 6; estancamiento 75 vs 94.
+- OK: P6 mejora ventilacion y estancamiento. Vent 15 vs 10; estancamiento 85 vs 90.
 - OK: P3 reduce emisiones y penaliza aceptacion. PM2.5 8,0%, aceptacion 50.
 - OK: P7, P8 y P9 ganan peso marginal. Mejoras P7 29, P8 30, P9 27.
 

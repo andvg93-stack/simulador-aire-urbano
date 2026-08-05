@@ -220,3 +220,20 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Verificación de reporte: la salida final incluye la nota que define temperatura exterior representativa y descarta temperatura superficial, índice de calor, sensación térmica y pronóstico.
 - Regresión final: el cliente determinista oficial confirmó PM2.5/PM10, CO₂, NOx, O₃, COV y Viento; la auditoría conserva 370 combinaciones y 39 planes aceptables.
 - Pendientes conocidos: ninguno dentro del alcance del laboratorio de Temperatura.
+
+## Laboratorio integrado de dispersión atmosférica
+
+- Rama de trabajo: `codex/recurso-dispersion-atmosferica`.
+- Solicitud activa: unificar velocidad del viento, altura de mezcla, índice de ventilación y estancamiento en un único laboratorio adicional.
+- Auditoría previa: las cuatro rutas recibían `value`, pero “En vivo” era estático, `advanceTime()` no avanzaba nada, ventilación reconstruía arbitrariamente dos entradas desde un índice y estancamiento podía cambiar sin relación con viento o mezcla.
+- Decisión de modelo: mostrar `viento × altura de mezcla` en m²/s como magnitud física y conservar 0–100 únicamente como escala comparativa normalizada del rango 35–1210 m²/s.
+- Implementación inicial: `modelo-dispersion.js` centraliza límites, cálculo complementario ventilación/estancamiento y efectos completos de P5/P6.
+- Integración inicial: el simulador ya deriva ambos índices solo desde viento y altura; PM2.5 dejó de alterar silenciosamente la meteorología.
+- Interfaz inicial: nueva ruta canónica y cuatro URLs compatibles comparten vistas de transporte, mezcla, ventilación y episodio; incluyen dirección, P5/P6, reproducción, pausa, restablecimiento y estado textual determinista.
+- Verificación inicial: sintaxis válida y cliente Playwright oficial confirma base 1,5 m/s, 102 m, 153 m²/s, ventilación 10,043 y estancamiento 89,957 sin errores.
+- Verificación funcional final: 61/61 comprobaciones pasan para rutas heredadas, extremos, P5/P6/P5+P6, dirección, cuatro vistas, pausa, avance determinista, movimiento reducido, geometría, móvil e integración.
+- Integración final: las cuatro tarjetas abren el foco correcto; botón interno, botón externo, Escape y mensaje conservan P5, 25 puntos usados, año e historial, y restauran el foco.
+- Verificación visual: transporte, mezcla, ventilación y estancamiento se revisaron en escritorio; transporte se revisó a 390×844, sin desbordamiento, recortes funcionales ni rótulos cubiertos.
+- Auditoría de balance: el script compartido usa `DispersionModel`; se mantienen 370 combinaciones y 39 planes aceptables. P1 ya no modifica meteorología; P5 produce 10,69/89,31 y P6 14,69/85,31.
+- Regresión final: cliente determinista oficial ejecutado sobre PM2.5/PM10, CO₂, NOx, O₃, COV, Temperatura y Dispersión, sin errores de consola.
+- Pendientes conocidos: ninguno dentro del alcance del laboratorio integrado de dispersión.

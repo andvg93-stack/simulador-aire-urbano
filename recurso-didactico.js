@@ -2088,6 +2088,379 @@
     if (!window.__vt_pending) requestAnimationFrame(animateTemperature);
   }
 
+  function renderDispersionLab(root) {
+    const model = window.DispersionModel;
+    if (!model) {
+      root.textContent = "No fue posible cargar el modelo de dispersión.";
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+    const validFocus = ["wind", "hmix", "vent", "stagnation"];
+    const focus = validFocus.includes(params.get("focus"))
+      ? params.get("focus")
+      : validFocus.includes(document.body.dataset.focus)
+        ? document.body.dataset.focus
+        : "vent";
+    const focusToView = { wind: "transport", hmix: "mixing", vent: "ventilation", stagnation: "stagnation" };
+    const embedded = params.get("embedded") === "1";
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const queryWind = params.has("wind") ? Number(params.get("wind")) : NaN;
+    const queryHmix = params.has("hmix") ? Number(params.get("hmix")) : NaN;
+    const legacyValue = params.has("value") ? Number(params.get("value")) : null;
+    const currentWind = Number.isFinite(queryWind)
+      ? queryWind
+      : focus === "wind" && Number.isFinite(legacyValue)
+        ? legacyValue
+        : model.baseline.wind;
+    const currentHmix = Number.isFinite(queryHmix)
+      ? queryHmix
+      : focus === "hmix" && Number.isFinite(legacyValue)
+        ? legacyValue
+        : model.baseline.hmix;
+    const current = model.calculate(currentWind, currentHmix);
+    const legacyDerived = (focus === "vent" || focus === "stagnation") && Number.isFinite(legacyValue)
+      ? { key: focus, value: clamp(legacyValue, 0, 100) }
+      : null;
+    const initialView = ["transport", "mixing", "ventilation", "stagnation"].includes(params.get("view"))
+      ? params.get("view")
+      : focusToView[focus];
+    const state = {
+      view: initialView,
+      wind: model.baseline.wind,
+      hmix: model.baseline.hmix,
+      direction: "east",
+      measure: "none",
+      playing: !reducedMotion,
+      phase: 0
+    };
+    let lastScene = {};
+
+    function selectedMeasures() {
+      if (state.measure === "P5P6") return ["P5", "P6"];
+      return state.measure === "none" ? [] : [state.measure];
+    }
+
+    function experiment() {
+      return model.evaluateExperiment({ wind: state.wind, hmix: state.hmix, measures: selectedMeasures() });
+    }
+
+    function directionData() {
+      return {
+        east: { label: "Oeste → Este", dx: 1, dy: 0, source: [120, 205], receptor: [590, 205] },
+        west: { label: "Este → Oeste", dx: -1, dy: 0, source: [600, 205], receptor: [130, 205] },
+        north: { label: "Sur → Norte", dx: 0, dy: -1, source: [360, 325], receptor: [360, 80] },
+        south: { label: "Norte → Sur", dx: 0, dy: 1, source: [360, 80], receptor: [360, 325] }
+      }[state.direction];
+    }
+
+    function particleMarkup(result, mode) {
+      const direction = directionData();
+      const speedRatio = ratio(result.wind, model.limits.wind[0], model.limits.wind[1]);
+      const heightRatio = ratio(result.hmix, model.limits.hmix[0], model.limits.hmix[1]);
+      const count = mode === "stagnation" ? 12 + Math.round(result.stagnation * 0.28) : 24;
+      const particles = [];
+      for (let i = 0; i < count; i += 1) {
+        const travel = ((i / count) + state.phase * (0.18 + speedRatio * 0.82)) % 1;
+        let x;
+        let y;
+        if (mode === "transport") {
+          x = direction.source[0] + (direction.receptor[0] - direction.source[0]) * travel;
+          y = direction.source[1] + (direction.receptor[1] - direction.source[1]) * travel;
+          const lateralX = direction.dy * (((i * 17) % 42) - 21) * (0.35 + heightRatio);
+          const lateralY = -direction.dx * (((i * 17) % 42) - 21) * (0.35 + heightRatio);
+          x += lateralX;
+          y += lateralY;
+        } else {
+          const layerTop = 250 - heightRatio * 145;
+          x = 70 + ((i * 83 + state.phase * (130 + speedRatio * 280)) % 590);
+          y = layerTop + 18 + ((i * 47) % Math.max(35, 292 - layerTop));
+        }
+        particles.push(`<circle class="dispersion-particle" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${mode === "stagnation" ? 5 : 4}" fill="${mode === "stagnation" ? palette.red : palette.orange}" opacity="${mode === "stagnation" ? 0.58 : 0.72}"/>`);
+      }
+      return { markup: particles.join(""), count };
+    }
+
+    function transportScene(result) {
+      const direction = directionData();
+      const particles = particleMarkup(result, "transport");
+      const arrowStartX = direction.source[0] + direction.dx * 58;
+      const arrowStartY = direction.source[1] + direction.dy * 58;
+      const arrowEndX = arrowStartX + direction.dx * 125;
+      const arrowEndY = arrowStartY + direction.dy * 125;
+      const blocks = [[40, 42], [520, 38], [46, 300], [525, 294]].map(([x, y], index) => `<g transform="translate(${x} ${y})"><rect width="145" height="72" rx="10" fill="${index % 2 ? "#cadccf" : "#d8e4d5"}" stroke="#92aa98"/><rect x="18" y="18" width="42" height="20" rx="4" fill="#8aa7b1"/><rect x="80" y="18" width="42" height="20" rx="4" fill="#8aa7b1"/><text x="72" y="58" text-anchor="middle" font-size="11" fill="${palette.muted}">Barrio</text></g>`).join("");
+      return {
+        svg: svgFrame("Vista superior del transporte de una pluma hacia un receptor a sotavento", `
+          <rect width="720" height="400" fill="#e7efe4"/>
+          ${blocks}
+          <path d="M0 180h720M340 0v400" stroke="#87969c" stroke-width="54"/>
+          <path d="M0 180h720M340 0v400" stroke="#f4d768" stroke-width="3" stroke-dasharray="14 15"/>
+          <circle cx="${direction.source[0]}" cy="${direction.source[1]}" r="31" fill="${palette.red}"/>
+          <text x="${direction.source[0]}" y="${direction.source[1] + 5}" text-anchor="middle" font-size="12" font-weight="900" fill="#fff">FUENTE</text>
+          <circle cx="${direction.receptor[0]}" cy="${direction.receptor[1]}" r="36" fill="#fff" stroke="${palette.blue}" stroke-width="5"/>
+          <circle cx="${direction.receptor[0]}" cy="${direction.receptor[1]}" r="8" fill="${palette.blue}"/>
+          <text x="${direction.receptor[0]}" y="${direction.receptor[1] + 58}" text-anchor="middle" font-size="12" font-weight="900" fill="${palette.blue}">RECEPTOR A SOTAVENTO</text>
+          <line x1="${arrowStartX}" y1="${arrowStartY}" x2="${arrowEndX}" y2="${arrowEndY}" stroke="${palette.teal}" stroke-width="9" stroke-linecap="round" marker-end="url(#arrow)"/>
+          ${particles.markup}
+          <rect x="22" y="348" width="250" height="34" rx="17" fill="#fff" opacity=".94"/>
+          <text x="147" y="370" text-anchor="middle" font-size="13" font-weight="900" fill="${palette.ink}">${direction.label} · ${fmt(result.wind, 1)} m/s</text>
+        `, "#eef6f1"),
+        particles: particles.count,
+        receptor: direction.receptor,
+        description: "La dirección decide qué receptor queda a sotavento; la velocidad cambia el transporte, no la masa emitida."
+      };
+    }
+
+    function mixingSceneForLab(result, combined = false) {
+      const heightRatio = ratio(result.hmix, model.limits.hmix[0], model.limits.hmix[1]);
+      const speedRatio = ratio(result.wind, model.limits.wind[0], model.limits.wind[1]);
+      const top = 250 - heightRatio * 145;
+      const particles = particleMarkup(result, "mixing");
+      const arrows = Array.from({ length: 4 }, (_, i) => {
+        const y = 80 + i * 42;
+        const length = 45 + speedRatio * 125;
+        return `<line x1="65" y1="${y}" x2="${65 + length}" y2="${y}" stroke="${palette.teal}" stroke-width="6" stroke-linecap="round"/><path d="M${65 + length} ${y}l-14-9v18z" fill="${palette.teal}"/>`;
+      }).join("");
+      return {
+        svg: svgFrame(combined ? "Relación entre viento, altura de mezcla y ventilación" : "Corte vertical de la capa de mezcla urbana", `
+          <rect width="720" height="315" fill="url(#sky)"/>
+          <rect y="${top}" width="720" height="${315 - top}" fill="${palette.blue}" opacity=".12"/>
+          <line x1="0" y1="${top}" x2="720" y2="${top}" stroke="${palette.blue}" stroke-width="5" stroke-dasharray="14 9"/>
+          ${arrows}${particles.markup}${buildings(315)}
+          <rect x="536" y="${top - 19}" width="154" height="36" rx="18" fill="#fff"/>
+          <text x="613" y="${top + 5}" text-anchor="middle" font-size="13" font-weight="900" fill="${palette.blue}">${fmt(result.hmix, 1)} m</text>
+          <rect y="315" width="720" height="85" fill="#78966e"/>
+          <text x="26" y="349" font-size="13" font-weight="900" fill="#fff">Emisión constante · volumen de mezcla variable</text>
+          ${combined ? `<rect x="360" y="337" width="326" height="45" rx="12" fill="#fff" opacity=".95"/><text x="523" y="357" text-anchor="middle" font-size="12" font-weight="800" fill="${palette.muted}">VIENTO × ALTURA</text><text x="523" y="376" text-anchor="middle" font-size="17" font-weight="900" fill="${palette.teal}">${fmt(result.rate, 1)} m²/s</text>` : ""}
+        `, "#eef5f6"),
+        particles: particles.count,
+        layerTop: Number(top.toFixed(1)),
+        description: combined
+          ? "El coeficiente físico combina transporte horizontal y volumen vertical; ninguno de los dos componentes debe interpretarse por separado."
+          : "Una capa más profunda ofrece mayor volumen vertical para la misma emisión, sin crear ni eliminar contaminantes."
+      };
+    }
+
+    function stagnationSceneForLab(result) {
+      const heightRatio = ratio(result.hmix, model.limits.hmix[0], model.limits.hmix[1]);
+      const top = 250 - heightRatio * 145;
+      const particles = particleMarkup(result, "stagnation");
+      const hour = state.phase * 24;
+      return {
+        svg: svgFrame("Evolución didáctica de un episodio de estancamiento durante 24 horas", `
+          <rect width="720" height="310" fill="url(#sky)"/>
+          <rect y="${top}" width="720" height="${310 - top}" fill="${palette.red}" opacity="${(0.08 + result.stagnation / 250).toFixed(2)}"/>
+          <line x1="0" y1="${top}" x2="720" y2="${top}" stroke="${palette.orange}" stroke-width="6"/>
+          ${particles.markup}${buildings(310)}
+          <rect x="500" y="${top - 40}" width="190" height="32" rx="16" fill="#fff"/>
+          <text x="595" y="${top - 18}" text-anchor="middle" font-size="12" font-weight="900" fill="${palette.orange}">Mezcla limitada</text>
+          <rect y="310" width="720" height="90" fill="#fff"/>
+          <line x1="54" y1="353" x2="666" y2="353" stroke="#d9e1dd" stroke-width="10" stroke-linecap="round"/>
+          <line x1="54" y1="353" x2="${54 + 612 * state.phase}" y2="353" stroke="${palette.red}" stroke-width="10" stroke-linecap="round"/>
+          ${[0, 6, 12, 18, 24].map((value, i) => `<text x="${54 + i * 153}" y="383" text-anchor="middle" font-size="12" fill="${palette.muted}">${value} h</text>`).join("")}
+          <rect x="286" y="319" width="148" height="28" rx="14" fill="#f9efee"/>
+          <text x="360" y="338" text-anchor="middle" font-size="13" font-weight="900" fill="${palette.red}">${fmt(hour, 1)} horas</text>
+        `, "#f4f1eb"),
+        particles: particles.count,
+        hour: Number(hour.toFixed(2)),
+        layerTop: Number(top.toFixed(1)),
+        description: "Con ventilación limitada aumenta la permanencia visual cerca del suelo. La escena muestra tendencia relativa, no una concentración medida."
+      };
+    }
+
+    function buildScene(result) {
+      if (state.view === "transport") return transportScene(result);
+      if (state.view === "mixing") return mixingSceneForLab(result, false);
+      if (state.view === "ventilation") return mixingSceneForLab(result, true);
+      return stagnationSceneForLab(result);
+    }
+
+    const closeLabel = embedded ? "Cerrar laboratorio" : "Volver al simulador";
+    root.className = "resource-shell dispersion-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back" id="dispersion-close" type="button">← ${closeLabel}</button><span class="resource-tag">Laboratorio integrado</span></nav>
+      <header class="resource-header particulate-header">
+        <div><p class="eyebrow">Transporte y mezcla atmosférica</p><h1>¿Por qué se acumula la contaminación?</h1><p class="lead">Relaciona viento, altura de mezcla, ventilación física y estancamiento sin cambiar la emisión.</p></div>
+        <div class="header-mark" aria-hidden="true">↠↕</div>
+      </header>
+      <section class="dispersion-current" aria-label="Estado actual transferido del simulador">
+        <div><span>Viento actual</span><strong>${fmt(current.wind, 1)} m/s</strong></div>
+        <div><span>Mezcla actual</span><strong>${fmt(current.hmix, 1)} m</strong></div>
+        <div><span>Ventilación física</span><strong>${fmt(current.rate, 1)} m²/s</strong></div>
+        <div><span>Índices actuales</span><strong>V ${fmt(current.ventilation, 1)} · E ${fmt(current.stagnation, 1)}</strong></div>
+        ${legacyDerived ? `<p class="legacy-note">Enlace legado: ${legacyDerived.key === "vent" ? "ventilación" : "estancamiento"} ${fmt(legacyDerived.value, 1)}/100. No se inventaron valores de viento y altura para reconstruirlo.</p>` : ""}
+      </section>
+      <div class="view-tabs dispersion-tabs" role="tablist" aria-label="Vista del laboratorio">
+        <button type="button" role="tab" data-dispersion-view="transport">Transporte</button>
+        <button type="button" role="tab" data-dispersion-view="mixing">Mezcla vertical</button>
+        <button type="button" role="tab" data-dispersion-view="ventilation">Ventilación</button>
+        <button type="button" role="tab" data-dispersion-view="stagnation">Estancamiento</button>
+      </div>
+      <section class="particulate-workspace">
+        <article class="card scene-card particulate-scene-card">
+          <div class="card-head"><div><h2 id="dispersion-scene-title">Escena sincronizada</h2><p id="dispersion-scene-description"></p></div><span class="live-badge" id="dispersion-live">En movimiento</span></div>
+          <div class="particulate-scene" id="dispersion-scene"></div>
+          <div class="scene-legend"><span class="legend-item"><i class="legend-dot" style="--dot:#047a7a"></i>Flujo de aire</span><span class="legend-item"><i class="legend-dot" style="--dot:#d9822b"></i>Emisión constante</span><span class="legend-item"><i class="legend-dot" style="--dot:#2563a8"></i>Capa de mezcla</span></div>
+        </article>
+        <aside class="card control-card particulate-controls">
+          <h2>Experimenta</h2>
+          <div class="control-group"><label class="control-label" for="dispersion-wind"><span>Viento representativo</span><span class="control-readout" id="dispersion-wind-readout"></span></label><input id="dispersion-wind" type="range" min="0.5" max="5.5" step="0.1"><div class="range-labels"><span>0,5 m/s</span><span>5,5 m/s</span></div></div>
+          <div class="control-group"><label class="control-label" for="dispersion-hmix"><span>Altura de mezcla</span><span class="control-readout" id="dispersion-hmix-readout"></span></label><input id="dispersion-hmix" type="range" min="70" max="220" step="1"><div class="range-labels"><span>70 m</span><span>220 m</span></div></div>
+          <div class="control-group"><label class="control-label" for="dispersion-direction"><span>Dirección del transporte</span></label><select class="select-control" id="dispersion-direction"><option value="east">Oeste → Este</option><option value="west">Este → Oeste</option><option value="north">Sur → Norte</option><option value="south">Norte → Sur</option></select></div>
+          <div class="control-group"><label class="control-label" for="dispersion-measure"><span>Aplicar medida demostrativa</span></label><select class="select-control" id="dispersion-measure"><option value="none">Ninguna</option><option value="P5">P5 · Arborización técnica</option><option value="P6">P6 · Corredores de ventilación</option><option value="P5P6">P5 + P6</option></select></div>
+          <div class="playback-controls"><button id="dispersion-play" type="button"></button><button class="secondary" id="dispersion-reset" type="button">Restablecer</button></div>
+          <p class="didactic-note">El viento se usa como aproximación del viento de transporte. El laboratorio no sustituye un modelo de dispersión regulatorio.</p>
+        </aside>
+      </section>
+      <section class="dispersion-results" aria-label="Resultados del experimento">
+        <article class="card dispersion-result-main"><p>Coeficiente físico</p><strong id="dispersion-rate"></strong><span>viento × altura de mezcla</span></article>
+        <article class="card dispersion-result-card"><p>Ventilación relativa</p><div><span id="dispersion-vent-before"></span><b>→</b><strong id="dispersion-vent-after"></strong></div><small>0–100 dentro del rango didáctico</small></article>
+        <article class="card dispersion-result-card"><p>Estancamiento relativo</p><div><span id="dispersion-stag-before"></span><b>→</b><strong id="dispersion-stag-after"></strong></div><small>Siempre 100 − ventilación</small></article>
+        <article class="card dispersion-result-card"><p>Condiciones efectivas</p><strong id="dispersion-effective"></strong><small id="dispersion-measure-note"></small></article>
+      </section>
+      <section class="particulate-info-grid">
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">↠</span><h2>Transportar no es eliminar</h2><p>El viento reduce la concentración cerca de una fuente, pero desplaza la pluma hacia receptores a sotavento.</p></article>
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">↕</span><h2>Volumen vertical</h2><p>Una capa de mezcla más profunda distribuye la misma emisión en un volumen mayor de aire.</p></article>
+        <article class="card info-card"><span class="info-icon" aria-hidden="true">24h</span><h2>Persistencia</h2><p>Viento débil y mezcla limitada favorecen episodios prolongados cerca del suelo; una inversión es una causa posible.</p></article>
+      </section>
+      <section class="reference-note"><strong>Lectura correcta:</strong> el resultado en m²/s es físico; las escalas 0–100 son comparaciones internas del simulador, no límites sanitarios ni categorías meteorológicas universales.</section>
+    `;
+
+    const elements = {
+      wind: document.getElementById("dispersion-wind"),
+      hmix: document.getElementById("dispersion-hmix"),
+      direction: document.getElementById("dispersion-direction"),
+      measure: document.getElementById("dispersion-measure"),
+      play: document.getElementById("dispersion-play"),
+      scene: document.getElementById("dispersion-scene")
+    };
+
+    function renderScene() {
+      const result = experiment();
+      lastScene = buildScene(result.after);
+      elements.scene.innerHTML = lastScene.svg;
+      document.getElementById("dispersion-scene-description").textContent = lastScene.description;
+    }
+
+    function render() {
+      const result = experiment();
+      elements.wind.value = state.wind;
+      elements.hmix.value = state.hmix;
+      elements.direction.value = state.direction;
+      elements.measure.value = state.measure;
+      document.getElementById("dispersion-wind-readout").textContent = `${fmt(state.wind, 1)} m/s`;
+      document.getElementById("dispersion-hmix-readout").textContent = `${fmt(state.hmix, 0)} m`;
+      document.querySelectorAll("[data-dispersion-view]").forEach(button => {
+        const active = button.dataset.dispersionView === state.view;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+      elements.play.textContent = state.playing ? "Pausar" : "Reproducir";
+      elements.play.setAttribute("aria-pressed", String(state.playing));
+      document.getElementById("dispersion-live").textContent = state.playing ? "En movimiento" : "En pausa";
+      document.getElementById("dispersion-rate").textContent = `${fmt(result.after.rate, 1)} m²/s`;
+      document.getElementById("dispersion-vent-before").textContent = fmt(result.before.ventilation, 1);
+      document.getElementById("dispersion-vent-after").textContent = fmt(result.after.ventilation, 1);
+      document.getElementById("dispersion-stag-before").textContent = fmt(result.before.stagnation, 1);
+      document.getElementById("dispersion-stag-after").textContent = fmt(result.after.stagnation, 1);
+      document.getElementById("dispersion-effective").textContent = `${fmt(result.after.wind, 2)} m/s · ${fmt(result.after.hmix, 1)} m`;
+      document.getElementById("dispersion-measure-note").textContent = result.selected.length ? `${result.selected.join(" + ")} aplicada al experimento` : "Sin medida: antes y después coinciden";
+      renderScene();
+    }
+
+    const viewButtons = [...document.querySelectorAll("[data-dispersion-view]")];
+    viewButtons.forEach((button, index) => {
+      button.addEventListener("click", () => { state.view = button.dataset.dispersionView; render(); });
+      button.addEventListener("keydown", event => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const offset = event.key === "ArrowRight" ? 1 : -1;
+        viewButtons[(index + offset + viewButtons.length) % viewButtons.length].click();
+        viewButtons[(index + offset + viewButtons.length) % viewButtons.length].focus();
+      });
+    });
+    elements.wind.addEventListener("input", () => { state.wind = Number(elements.wind.value); render(); });
+    elements.hmix.addEventListener("input", () => { state.hmix = Number(elements.hmix.value); render(); });
+    elements.direction.addEventListener("change", () => { state.direction = elements.direction.value; render(); });
+    elements.measure.addEventListener("change", () => { state.measure = elements.measure.value; render(); });
+    elements.play.addEventListener("click", () => { state.playing = !state.playing; render(); });
+    document.getElementById("dispersion-reset").addEventListener("click", () => {
+      Object.assign(state, { view: initialView, wind: model.baseline.wind, hmix: model.baseline.hmix, direction: "east", measure: "none", playing: !reducedMotion, phase: 0 });
+      render();
+    });
+    document.getElementById("dispersion-close").addEventListener("click", () => {
+      if (embedded && window.parent !== window) window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      else if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) history.back();
+      else location.href = "index.html";
+    });
+    window.addEventListener("keydown", event => {
+      if (event.key === "Escape" && embedded && window.parent !== window) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "educational-resource:close" }, location.origin);
+      }
+    });
+
+    function renderResourceToText() {
+      const result = experiment();
+      return JSON.stringify({
+        resource: "dispersion",
+        focus,
+        view: state.view,
+        coordinateSystem: "SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",
+        current: {
+          windMs: Number(current.wind.toFixed(3)),
+          mixingHeightM: Number(current.hmix.toFixed(3)),
+          ventilationRateM2s: Number(current.rate.toFixed(3)),
+          ventilationIndex: Number(current.ventilation.toFixed(3)),
+          stagnationIndex: Number(current.stagnation.toFixed(3)),
+          legacyDerived
+        },
+        experiment: {
+          windMs: Number(state.wind.toFixed(3)),
+          mixingHeightM: Number(state.hmix.toFixed(3)),
+          direction: state.direction,
+          measures: result.selected,
+          before: {
+            rateM2s: Number(result.before.rate.toFixed(3)),
+            ventilation: Number(result.before.ventilation.toFixed(3)),
+            stagnation: Number(result.before.stagnation.toFixed(3))
+          },
+          after: {
+            windMs: Number(result.after.wind.toFixed(3)),
+            mixingHeightM: Number(result.after.hmix.toFixed(3)),
+            rateM2s: Number(result.after.rate.toFixed(3)),
+            ventilation: Number(result.after.ventilation.toFixed(3)),
+            stagnation: Number(result.after.stagnation.toFixed(3))
+          }
+        },
+        animation: { playing: state.playing, phase: Number(state.phase.toFixed(3)), simulatedHour: Number((state.phase * 24).toFixed(2)) },
+        visible: { particles: lastScene.particles || 0, receptor: lastScene.receptor || null, layerTop: lastScene.layerTop ?? null }
+      });
+    }
+
+    window.RESOURCE = { kind: "integrated-atmospheric-dispersion" };
+    window.render_resource_to_text = renderResourceToText;
+    window.render_game_to_text = renderResourceToText;
+    window.advanceTime = ms => {
+      if (state.playing) state.phase = (state.phase + Math.max(0, Number(ms) || 0) / 6000) % 1;
+      renderScene();
+      return renderResourceToText();
+    };
+    let lastFrame = performance.now();
+    function animateDispersion(now) {
+      const delta = Math.min(50, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      if (state.playing) {
+        state.phase = (state.phase + delta / 6000) % 1;
+        renderScene();
+      }
+      requestAnimationFrame(animateDispersion);
+    }
+    render();
+    if (!window.__vt_pending) requestAnimationFrame(animateDispersion);
+  }
+
   const key = document.body.dataset.resource;
   const root = document.getElementById("resource-app");
   if (!root) return;
@@ -2119,6 +2492,11 @@
 
   if (key === "temp") {
     renderTemperatureLab(root);
+    return;
+  }
+
+  if (key === "dispersion") {
+    renderDispersionLab(root);
     return;
   }
 

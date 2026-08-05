@@ -3,6 +3,7 @@ const vm = require("vm");
 
 const INDEX_PATH = "index.html";
 const NOX_MODEL_PATH = "modelo-nox.js";
+const DISPERSION_MODEL_PATH = "modelo-dispersion.js";
 const JSON_OUT = "policy-audit-report.json";
 const MD_OUT = "policy-audit-summary.md";
 const CSV_OUT = "policy-audit-combinations.csv";
@@ -19,12 +20,14 @@ function readIndexModel() {
   const context = {};
   context.window = context;
   vm.runInNewContext(fs.readFileSync(NOX_MODEL_PATH, "utf8"), context);
+  vm.runInNewContext(fs.readFileSync(DISPERSION_MODEL_PATH, "utf8"), context);
+  context.baselineDispersion = vm.runInNewContext(extractConst(source, "baselineDispersion"), context);
   const baseline = vm.runInNewContext(`(${extractConst(source, "baseline")})`, context);
   const policies = vm.runInNewContext(`(${extractConst(source, "policies")})`, context);
   const budget = Number(extractConst(source, "BUDGET"));
   const maxPolicies = Number(extractConst(source, "MAX_POLICIES"));
   const totalYears = Number(extractConst(source, "TOTAL_YEARS"));
-  return { baseline, policies, budget, maxPolicies, totalYears };
+  return { baseline, policies, budget, maxPolicies, totalYears, dispersion: context.DispersionModel };
 }
 
 function clamp(value, min, max) {
@@ -81,8 +84,9 @@ function calculateValues(model, selectedPolicies, year) {
   const wind = baseline.wind * clamp(1 + sums.wind, 0.55, 1.65);
   const hmix = baseline.hmix * clamp(1 + sums.hmix, 0.8, 1.45);
   const exposure = baseline.exposure * clamp(1 + sums.exposure, 0.35, 1.05);
-  const vent = clamp(baseline.vent + ((wind / baseline.wind - 1) * 58) + ((hmix / baseline.hmix - 1) * 34) + (Math.max(0, -sums.pm25) * 32), 0, 100);
-  const stagnation = clamp(100 - vent, 0, 100);
+  const dispersion = model.dispersion.calculate(wind, hmix);
+  const vent = dispersion.ventilation;
+  const stagnation = dispersion.stagnation;
 
   const covReduction = clamp(1 - (cov / baseline.cov), -0.2, 0.8);
   const noxReduction = clamp(1 - (nox / baseline.nox), -0.2, 0.8);
@@ -294,7 +298,7 @@ function buildIntentChecks(model, evaluations, marginal) {
     {
       check: "P6 mejora ventilacion y estancamiento",
       pass: byCode.P6.values.vent > model.baseline.vent && byCode.P6.values.stagnation < model.baseline.stagnation,
-      evidence: `Vent ${fmt(byCode.P6.values.vent, 0)} vs ${model.baseline.vent}; estancamiento ${fmt(byCode.P6.values.stagnation, 0)} vs ${model.baseline.stagnation}`
+      evidence: `Vent ${fmt(byCode.P6.values.vent, 0)} vs ${fmt(model.baseline.vent, 0)}; estancamiento ${fmt(byCode.P6.values.stagnation, 0)} vs ${fmt(model.baseline.stagnation, 0)}`
     },
     {
       check: "P3 reduce emisiones y penaliza aceptacion",

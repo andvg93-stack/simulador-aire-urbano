@@ -212,6 +212,30 @@ La implementación debe calcular las combinaciones con la misma función del sim
 ## Fuentes primarias y oficiales
 
 - [Ministerio de Ambiente y Desarrollo Sostenible, Resolución 2254 de 2017](https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf)
+
+## Plan integrado: viento, altura de mezcla, ventilación y estancamiento
+
+- Un único laboratorio explicará la cadena causal: viento y altura de mezcla son entradas físicas; el coeficiente de ventilación y el estancamiento son resultados derivados.
+- La magnitud principal será `viento × altura de mezcla` en m²/s. La ventilación relativa se normalizará entre 35 y 1210 m²/s al intervalo 0–100; estancamiento será siempre `100 − ventilación`.
+- Las cuatro tarjetas abrirán la misma ruta integrada con foco inicial propio, manteniendo las URLs antiguas y preservando políticas, presupuesto, año, historial y foco.
+- Las vistas sincronizadas serán transporte horizontal, mezcla vertical, ventilación combinada y episodio de 24 horas. La dirección cambiará el receptor a sotavento sin modificar cifras.
+- El experimento partirá de 1,5 m/s y 102 m; P5 aplicará +5 % a mezcla, P6 +18 % a viento y +15 % a mezcla, y P5+P6 sumará ambos efectos sin modificar el plan principal.
+- La animación tendrá ciclo determinista de 6000 ms, pausa exacta, movimiento reducido, restablecimiento y descripción completa mediante `render_game_to_text()`.
+- No se usarán categorías sanitarias ni umbrales universales de buena/mala ventilación; la escala 0–100 se identificará como interna del simulador.
+
+### Aceptación específica
+
+- Base: 153,0 m²/s, ventilación 10,0 y estancamiento 90,0.
+- P5: 160,65 m²/s, 10,7 y 89,3; P6: 207,62 m²/s, 14,7 y 85,3; P5+P6: 216,65 m²/s, 15,5 y 84,5.
+- Extremos: 0,5×70 producirá 35 m²/s, 0/100 y 100/100; 5,5×220 producirá 1210 m²/s, 100/100 y 0/100.
+- Playwright cubrirá las cuatro rutas, vistas, dirección, medidas, tiempo, teclado, movimiento reducido, geometría, escritorio, móvil, cierres e integración con el simulador.
+
+### Fuentes oficiales
+
+- [NWCG, Smoke Management Guide](https://www.govinfo.gov/content/pkg/GOVPUB-A13-PURL-gpo250381/pdf/GOVPUB-A13-PURL-gpo250381.pdf)
+- [NWS, Smoke Dispersal / Ventilation Rate](https://www.weather.gov/sgf/firewx_smoke_dispersal)
+- [IDEAM, estado de la calidad del aire en Colombia](https://www.ideam.gov.co/sites/default/files/prensa/boletines/2024-08-14/informe_del_estado_de_la_calidad_del_aire_en_colombia_2020.pdf)
+- [EPA, modelos recomendados de dispersión](https://www.epa.gov/scram/air-quality-dispersion-modeling-preferred-and-recommended-models)
 - [OMS, valores guía y efectos de NO₂](https://www.who.int/teams/environment-climate-change-and-health/air-quality-and-health/health-impacts/types-of-pollutants)
 - [EPA, información básica sobre NO₂ y su relación con NOx](https://www.epa.gov/no2-pollution/basic-information-about-no2)
 - [EPA, formación secundaria y regímenes NOx/COV](https://www.epa.gov/sites/default/files/2020-09/documents/epa-454_r-19-003.pdf)
