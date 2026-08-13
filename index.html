@@ -674,8 +674,18 @@
   .year-node { color:#e9f2da; background:#315f3e; border-color:#86b86a; }
   .year-node::after { color:#c7d8ba; }
   .year-node.active { color:#214b2c; border-color:#c5ed65; background:#a8dd4e; box-shadow:0 0 18px rgba(183,229,86,.5); }
+  #educational-resource-dialog { width:min(1220px,96vw); height:min(930px,94vh); max-width:none; max-height:none; padding:0; overflow:hidden; border:1px solid rgba(232,242,204,.72); border-radius:20px; background:#eef2e9; box-shadow:0 30px 90px rgba(1,28,14,.58); }
+  #educational-resource-dialog::backdrop { background:rgba(2,24,13,.74); backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px); }
+  .resource-dialog-shell { display:grid; grid-template-rows:auto minmax(0,1fr); width:100%; height:100%; }
+  .resource-dialog-head { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:54px; padding:8px 12px 8px 18px; color:#eff6e8; background:linear-gradient(90deg,#123f29,#28633c); }
+  .resource-dialog-head div { display:grid; gap:2px; }
+  .resource-dialog-head strong { font-size:14px; }
+  .resource-dialog-head span { color:#cbdcbe; font-size:11px; }
+  #educational-resource-close { min-width:42px; min-height:42px; border:1px solid rgba(255,255,255,.28); border-radius:11px; color:#fff; background:rgba(255,255,255,.1); font-size:23px; cursor:pointer; }
+  #educational-resource-frame { width:100%; height:100%; border:0; background:#eef2e9; }
   @media(max-width:1180px){ #policy-panel .panel-head{min-height:145px;padding-left:62px} #policy-panel .panel-head::before{left:12px;width:38px;height:38px} #policy-panel .panel-head h1{font-size:19px} #policy-panel .panel-head p{font-size:11px} #monitor-panel{display:block;overflow:hidden} #param-grid{max-height:430px} }
   @media(max-width:820px){ #policy-panel .panel-head{min-height:116px;padding-left:72px} #policy-panel .panel-head h1{font-size:21px} }
+  @media(max-width:680px){ #educational-resource-dialog{width:100vw;height:100dvh;max-width:none;max-height:none;border:0;border-radius:0}.resource-dialog-head{min-height:50px}.resource-dialog-head span{display:none} }
 </style>
 </head>
 <body>
@@ -746,6 +756,13 @@
 
 </main>
 
+<dialog id="educational-resource-dialog" aria-labelledby="educational-resource-title">
+  <div class="resource-dialog-shell">
+    <div class="resource-dialog-head"><div><strong id="educational-resource-title">Laboratorio educativo</strong><span id="educational-resource-description">La exploración no modifica tu plan ambiental.</span></div><button id="educational-resource-close" type="button" aria-label="Cerrar laboratorio">×</button></div>
+    <iframe id="educational-resource-frame" title="Laboratorio educativo interactivo"></iframe>
+  </div>
+</dialog>
+
 <script type="importmap">
 {
   "imports": {
@@ -756,6 +773,9 @@
 </script>
 
 <script src="road-layout.js"></script>
+<script src="modelo-nox.js?v=4"></script>
+<script src="modelo-dispersion.js?v=1"></script>
+<script src="modelo-exposicion.js?v=1"></script>
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -766,42 +786,50 @@ const MAX_POLICIES = 5;
 const BUDGET = 100;
 const TOTAL_YEARS = 5;
 const YEAR_DURATION_MS = 4500;
+const CO2_DISPLAY_SCALE = { minIndex: 70, maxIndex: 100, minPpm: 431, maxPpm: 496 };
 
+function co2IndexToPpm(index) {
+  const bounded = clamp(Number(index), CO2_DISPLAY_SCALE.minIndex, CO2_DISPLAY_SCALE.maxIndex);
+  const progress = (bounded - CO2_DISPLAY_SCALE.minIndex) / (CO2_DISPLAY_SCALE.maxIndex - CO2_DISPLAY_SCALE.minIndex);
+  return CO2_DISPLAY_SCALE.minPpm + progress * (CO2_DISPLAY_SCALE.maxPpm - CO2_DISPLAY_SCALE.minPpm);
+}
+
+const baselineDispersion = DispersionModel.calculate(DispersionModel.baseline.wind, DispersionModel.baseline.hmix);
 const baseline = {
   pm25: 67.0,
   pm10: 98.1,
-  co2: 496,
-  nox: 94,
-  o3: 20.2,
-  cov: 33.9,
-  temp: 25.7,
-  wind: 1.5,
-  hmix: 102,
-  vent: 6,
-  stagnation: 94,
-  exposure: 78000,
-  vulnerable: 18000,
+  co2: 100,
+  nox: NoxModel.baseline.nox,
+  o3: NoxModel.baseline.o3,
+  cov: NoxModel.baseline.cov,
+  temp: NoxModel.baseline.temp,
+  wind: DispersionModel.baseline.wind,
+  hmix: DispersionModel.baseline.hmix,
+  vent: baselineDispersion.ventilation,
+  stagnation: baselineDispersion.stagnation,
+  exposure: ExposureModel.baseline.exposure,
+  vulnerable: ExposureModel.baseline.susceptible,
   acceptance: 70,
   equity: 45
 };
 
 const policies = [
-  { code: "P1", name: "Zona de bajas emisiones", cost: 35, implementation: 3, degradation: null, acceptance: -12, equity: 8, description: "Restringe vehículos altamente contaminantes en el centro.", effects: { pm25: -0.18, pm10: -0.12, nox: -0.25, cov: -0.08, co2: -0.10, temp: 0, wind: 0, hmix: 0, exposure: -0.12 } },
-  { code: "P2", name: "Buses eléctricos o de baja emisión", cost: 45, implementation: 5, degradation: null, acceptance: 5, equity: 12, description: "Reduce emisiones del transporte público.", effects: { pm25: -0.18, pm10: -0.10, nox: -0.35, cov: -0.04, co2: -0.15, temp: 0, wind: 0, hmix: 0, exposure: -0.12 } },
-  { code: "P3", name: "Restricción vehicular parcial", cost: 15, implementation: 1, degradation: null, acceptance: -20, equity: -8, description: "Reduce temporalmente circulación de vehículos particulares.", effects: { pm25: -0.08, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.05, temp: 0, wind: 0, hmix: 0, exposure: -0.05 } },
-  { code: "P4", name: "Ciclorrutas y vías peatonales", cost: 30, implementation: 3, degradation: null, acceptance: 8, equity: 10, description: "Disminuye viajes cortos motorizados.", effects: { pm25: -0.08, pm10: -0.05, nox: -0.10, cov: -0.04, co2: -0.07, temp: -0.2, wind: 0, hmix: 0, exposure: -0.06 } },
-  { code: "P5", name: "Arborización urbana técnica", cost: 25, implementation: 5, degradation: null, acceptance: 12, equity: 8, description: "Aumenta cobertura vegetal y reduce isla de calor.", effects: { pm25: -0.05, pm10: -0.08, nox: 0, cov: -0.02, co2: -0.03, temp: -1.1, wind: 0, hmix: 0.05, exposure: -0.07 } },
-  { code: "P6", name: "Corredores urbanos de ventilación", cost: 30, implementation: 5, degradation: null, acceptance: -5, equity: 6, description: "Reduce bloqueo del flujo de aire en zonas densas.", effects: { pm25: -0.10, pm10: -0.10, nox: -0.08, cov: -0.06, co2: 0, temp: -0.4, wind: 0.18, hmix: 0.15, exposure: -0.10 } },
-  { code: "P7", name: "Control de obras y polvo", cost: 15, implementation: 1, degradation: 7, acceptance: 4, equity: 4, description: "Reduce PM10 por obras, vías destapadas y material particulado grueso.", effects: { pm25: -0.02, pm10: -0.22, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.04 } },
-  { code: "P8", name: "Control de COV", cost: 20, implementation: 3, degradation: 5, acceptance: -4, equity: 3, description: "Reduce precursores de ozono en comercio e industria liviana.", effects: { pm25: -0.03, pm10: -0.02, nox: 0, cov: -0.35, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.05 } },
-  { code: "P9", name: "Teletrabajo y horarios escalonados", cost: 10, implementation: 1, degradation: 6, acceptance: 5, equity: 2, description: "Reduce congestión en horas pico.", effects: { pm25: -0.06, pm10: -0.04, nox: -0.08, cov: -0.03, co2: -0.05, temp: 0, wind: 0, hmix: 0, exposure: -0.10 } },
-  { code: "P10", name: "Alertas y gestión de exposición", cost: 10, implementation: 1, degradation: 1, acceptance: 10, equity: 15, description: "Reduce exposición de población vulnerable sin reducir emisiones.", effects: { pm25: 0, pm10: 0, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.18 } }
+  { code: "P1", name: "Zona de bajas emisiones", cost: 35, implementation: 3, degradation: null, acceptance: -12, equity: 8, description: "Restringe vehículos altamente contaminantes en el centro.", effects: NoxModel.mergePolicyEffects("P1", { pm25: -0.18, pm10: -0.12, co2: -0.10, hmix: 0, exposure: ExposureModel.effectFor("P1") }) },
+  { code: "P2", name: "Buses eléctricos o de baja emisión", cost: 45, implementation: 5, degradation: null, acceptance: 5, equity: 12, description: "Reduce emisiones del transporte público.", effects: NoxModel.mergePolicyEffects("P2", { pm25: -0.18, pm10: -0.10, co2: -0.15, hmix: 0, exposure: ExposureModel.effectFor("P2") }) },
+  { code: "P3", name: "Restricción vehicular parcial", cost: 15, implementation: 1, degradation: null, acceptance: -20, equity: -8, description: "Reduce temporalmente circulación de vehículos particulares.", effects: NoxModel.mergePolicyEffects("P3", { pm25: -0.08, pm10: -0.05, co2: -0.05, hmix: 0, exposure: ExposureModel.effectFor("P3") }) },
+  { code: "P4", name: "Ciclorrutas y vías peatonales", cost: 30, implementation: 3, degradation: null, acceptance: 8, equity: 10, description: "Disminuye viajes cortos motorizados.", effects: NoxModel.mergePolicyEffects("P4", { pm25: -0.08, pm10: -0.05, co2: -0.07, hmix: 0, exposure: ExposureModel.effectFor("P4") }) },
+  { code: "P5", name: "Arborización urbana técnica", cost: 25, implementation: 5, degradation: null, acceptance: 12, equity: 8, description: "Aumenta cobertura vegetal y reduce isla de calor.", effects: NoxModel.mergePolicyEffects("P5", { pm25: -0.05, pm10: -0.08, co2: -0.03, hmix: 0.05, exposure: ExposureModel.effectFor("P5") }) },
+  { code: "P6", name: "Corredores urbanos de ventilación", cost: 30, implementation: 5, degradation: null, acceptance: -5, equity: 6, description: "Reduce bloqueo del flujo de aire en zonas densas.", effects: NoxModel.mergePolicyEffects("P6", { pm25: -0.10, pm10: -0.10, co2: 0, hmix: 0.15, exposure: ExposureModel.effectFor("P6") }) },
+  { code: "P7", name: "Control de obras y polvo", cost: 15, implementation: 1, degradation: 7, acceptance: 4, equity: 4, description: "Reduce PM10 por obras, vías destapadas y material particulado grueso.", effects: { pm25: -0.02, pm10: -0.22, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: ExposureModel.effectFor("P7") } },
+  { code: "P8", name: "Control de COV", cost: 20, implementation: 3, degradation: 5, acceptance: -4, equity: 3, description: "Reduce precursores de ozono en comercio e industria liviana.", effects: NoxModel.mergePolicyEffects("P8", { pm25: -0.03, pm10: -0.02, co2: 0, hmix: 0, exposure: ExposureModel.effectFor("P8") }) },
+  { code: "P9", name: "Teletrabajo y horarios escalonados", cost: 10, implementation: 1, degradation: 6, acceptance: 5, equity: 2, description: "Reduce congestión en horas pico.", effects: NoxModel.mergePolicyEffects("P9", { pm25: -0.06, pm10: -0.04, co2: -0.05, hmix: 0, exposure: ExposureModel.effectFor("P9") }) },
+  { code: "P10", name: "Alertas y gestión de exposición", cost: 10, implementation: 1, degradation: 1, acceptance: 10, equity: 15, description: "Reduce exposición de población vulnerable sin reducir emisiones.", effects: { pm25: 0, pm10: 0, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: ExposureModel.effectFor("P10") } }
 ];
 
 const paramDefinitions = [
-  { key: "pm25", label: "PM2.5", unit: "µg/m³", min: 5, max: 80, digits: 1, inverse: true, resource: "recurso-pm25.html" },
-  { key: "pm10", label: "PM10", unit: "µg/m³", min: 10, max: 120, digits: 1, inverse: true, resource: "recurso-pm10.html" },
-  { key: "co2", label: "CO₂", unit: "ppm", min: 400, max: 700, digits: 0, inverse: true, resource: "recurso-co2.html" },
+  { key: "pm25", label: "PM2.5", unit: "µg/m³", averaging: "24 h", min: 5, max: 80, digits: 1, inverse: true, resource: "recurso-pm25.html" },
+  { key: "pm10", label: "PM10", unit: "µg/m³", averaging: "24 h", min: 10, max: 120, digits: 1, inverse: true, resource: "recurso-pm10.html" },
+  { key: "co2", label: "CO₂ equivalente", unit: "ppm", min: 65, max: 115, digits: 0, inverse: true, display: co2IndexToPpm, resource: "recurso-co2.html" },
   { key: "nox", label: "NOx", unit: "ppb", min: 10, max: 120, digits: 0, inverse: true, resource: "recurso-nox.html" },
   { key: "o3", label: "O₃", unit: "ppb", min: 10, max: 60, digits: 1, inverse: true, resource: "recurso-ozono.html" },
   { key: "cov", label: "COV", unit: "µg/m³", min: 5, max: 50, digits: 1, inverse: true, resource: "recurso-cov.html" },
@@ -810,7 +838,7 @@ const paramDefinitions = [
   { key: "hmix", label: "Altura mezcla", unit: "m", min: 70, max: 220, digits: 0, resource: "recurso-altura-mezcla.html" },
   { key: "vent", label: "Índice ventilación", unit: "0-100", min: 0, max: 100, digits: 0, resource: "recurso-indice-ventilacion.html" },
   { key: "stagnation", label: "Estancamiento", unit: "0-100", min: 0, max: 100, digits: 0, inverse: true, resource: "recurso-estancamiento.html" },
-  { key: "exposure", label: "Población expuesta", unit: "hab.", min: 30000, max: 80000, digits: 0, inverse: true, resource: "recurso-exposicion.html" }
+  { key: "exposure", label: "Población expuesta", unit: "hab.", min: 27300, max: 80000, digits: 0, inverse: true, resource: "recurso-exposicion.html" }
 ];
 
 const plannedPolicies = new Set();
@@ -875,6 +903,97 @@ function fmt(value, digits = 0) {
 function fmtBudget(value) {
   return `${fmt(value * 1000, 0)} millones COP`;
 }
+
+const educationalResourceDialog = document.getElementById("educational-resource-dialog");
+const educationalResourceFrame = document.getElementById("educational-resource-frame");
+const educationalResourceClose = document.getElementById("educational-resource-close");
+const educationalResourceTitle = document.getElementById("educational-resource-title");
+const educationalResourceDescription = document.getElementById("educational-resource-description");
+let educationalResourceReturnFocus = null;
+let educationalResourceFocus = null;
+
+function particulateResourceUrl(focus, values, embedded = false) {
+  const params = new URLSearchParams({
+    value: Number(values[focus]).toFixed(1),
+    focus,
+    pm25: Number(values.pm25).toFixed(1),
+    pm10: Number(values.pm10).toFixed(1)
+  });
+  if (embedded) params.set("embedded", "1");
+  return `recurso-${focus}.html?${params.toString()}`;
+}
+
+function educationalResourceUrl(resource, values, embedded = false) {
+  if (resource === "pm25" || resource === "pm10") return particulateResourceUrl(resource, values, embedded);
+  if (["wind", "hmix", "vent", "stagnation"].includes(resource)) {
+    const params = new URLSearchParams({
+      focus: resource,
+      wind: Number(values.wind).toFixed(2),
+      hmix: Number(values.hmix).toFixed(1)
+    });
+    if (embedded) params.set("embedded", "1");
+    return `recurso-dispersion-atmosferica.html?${params.toString()}`;
+  }
+  if (resource === "exposure") {
+    const params = new URLSearchParams({ current: Number(values.exposure).toFixed(0), vulnerable: Number(values.vulnerable).toFixed(0) });
+    if (embedded) params.set("embedded", "1");
+    return `recurso-exposicion.html?${params.toString()}`;
+  }
+  const current = resource === "nox" ? values.nox : resource === "o3" ? values.o3 : resource === "cov" ? values.cov : resource === "temp" ? values.temp : values.co2;
+  const params = new URLSearchParams({ current: Number(current).toFixed(1) });
+  if (embedded) params.set("embedded", "1");
+  const filename = resource === "o3" ? "recurso-ozono.html" : resource === "temp" ? "recurso-temperatura.html" : `recurso-${resource}.html`;
+  return `${filename}?${params.toString()}`;
+}
+
+function openEducationalResource(resource, trigger) {
+  const values = calculateValues(currentYear);
+  educationalResourceReturnFocus = trigger || document.activeElement;
+  educationalResourceFocus = resource;
+  const particulate = resource === "pm25" || resource === "pm10";
+  const nox = resource === "nox";
+  const ozone = resource === "o3";
+  const cov = resource === "cov";
+  const temperature = resource === "temp";
+  const dispersion = ["wind", "hmix", "vent", "stagnation"].includes(resource);
+  const exposure = resource === "exposure";
+  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : nox ? "Laboratorio de NOx y ozono" : ozone ? "Laboratorio de ozono troposférico" : cov ? "Laboratorio de compuestos orgánicos volátiles" : temperature ? "Laboratorio de temperatura urbana" : dispersion ? "Laboratorio de dispersión atmosférica" : exposure ? "Laboratorio de población expuesta" : "Laboratorio de emisiones de CO₂";
+  educationalResourceDescription.textContent = particulate
+    ? "Compara PM2.5 y PM10 sin modificar tu plan ambiental."
+    : nox
+      ? "Explora fuentes, exposición y química del ozono sin modificar tu plan."
+      : ozone
+        ? "Explora formación secundaria, transporte y exposición de 8 horas sin modificar tu plan."
+        : cov
+          ? "Distingue fuentes, concentración, exposición y efectos secundarios sin modificar tu plan."
+          : temperature
+            ? "Explora energía urbana, temperatura del aire, exposición y química sin modificar tu plan."
+            : dispersion
+              ? "Relaciona viento, mezcla, ventilación y estancamiento sin modificar tu plan."
+              : exposure
+                ? "Explora ubicación, permanencia y medidas de protección sin modificar tu plan."
+                : "Distingue emisiones urbanas y concentración atmosférica sin modificar tu plan.";
+  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : nox ? "Laboratorio de NOx, NO₂ y formación de ozono" : ozone ? "Laboratorio de formación, transporte y exposición a ozono" : cov ? "Laboratorio de fuentes, control y destino de COV" : temperature ? "Laboratorio de temperatura, energía urbana y exposición" : dispersion ? "Laboratorio de transporte, mezcla, ventilación y estancamiento" : exposure ? "Laboratorio de población expuesta y gestión dirigida" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
+  educationalResourceFrame.src = educationalResourceUrl(resource, values, true);
+  if (!educationalResourceDialog.open) educationalResourceDialog.showModal();
+  educationalResourceClose.focus();
+}
+
+function closeEducationalResource() {
+  if (educationalResourceDialog.open) educationalResourceDialog.close();
+}
+
+educationalResourceClose.addEventListener("click", closeEducationalResource);
+educationalResourceDialog.addEventListener("close", () => {
+  educationalResourceFrame.src = "about:blank";
+  educationalResourceFocus = null;
+  if (educationalResourceReturnFocus?.isConnected) educationalResourceReturnFocus.focus();
+  educationalResourceReturnFocus = null;
+});
+window.addEventListener("message", event => {
+  if (event.origin !== location.origin || event.source !== educationalResourceFrame.contentWindow) return;
+  if (event.data?.type === "educational-resource:close") closeEducationalResource();
+});
 
 function getPolicy(code) {
   return policies.find(policy => policy.code === code);
@@ -947,22 +1066,12 @@ function calculateValues(year) {
   const wind = baseline.wind * clamp(1 + sums.wind, 0.55, 1.65);
   const hmix = baseline.hmix * clamp(1 + sums.hmix, 0.8, 1.45);
   const exposure = baseline.exposure * clamp(1 + sums.exposure, 0.35, 1.05);
-  const vent = clamp(baseline.vent + ((wind / baseline.wind - 1) * 58) + ((hmix / baseline.hmix - 1) * 34) + (Math.max(0, -sums.pm25) * 32), 0, 100);
-  const stagnation = clamp(100 - vent, 0, 100);
+  const dispersion = DispersionModel.calculate(wind, hmix);
+  const vent = dispersion.ventilation;
+  const stagnation = dispersion.stagnation;
 
-  const covReduction = clamp(1 - (cov / baseline.cov), -0.2, 0.8);
-  const noxReduction = clamp(1 - (nox / baseline.nox), -0.2, 0.8);
-  let factorNoxCov = 0;
-  if (covReduction >= 0.20) {
-    factorNoxCov = -0.12;
-  } else if (noxReduction >= 0.20 && covReduction < 0.10) {
-    factorNoxCov = 0.08;
-  } else if (noxReduction >= 0.20 && covReduction >= 0.10) {
-    factorNoxCov = -0.05;
-  }
-  const factorTemp = Math.max(0, temp - baseline.temp) * 0.03;
-  const factorVent = Math.max(0, (wind / baseline.wind - 1) * 100) * -0.005;
-  const o3 = clamp(baseline.o3 * (1 + factorNoxCov + factorTemp + factorVent), 6, 90);
+  const ozone = NoxModel.ozoneResponse({ nox, cov, temp, wind }, NoxModel.baseline);
+  const o3 = clamp(ozone.value, 6, 90);
 
   return {
     year,
@@ -978,7 +1087,7 @@ function calculateValues(year) {
     vent,
     stagnation,
     exposure,
-    vulnerable: baseline.vulnerable * clamp(exposure / baseline.exposure, 0.35, 1.05),
+    vulnerable: exposure * ExposureModel.susceptibleRatio,
     acceptance,
     equity
   };
@@ -1211,7 +1320,8 @@ function updateDashboard(rawValues) {
 
   const grid = document.getElementById("param-grid");
   paramDefinitions.forEach(def => {
-    const value = values[def.key];
+    const value = def.key === "co2" ? rawValues[def.key] : values[def.key];
+    const displayValue = def.display ? def.display(value) : value;
     const ratio = clamp((value - def.min) / (def.max - def.min), 0, 1);
     const width = `${Math.round(ratio * 100)}%`;
     let card = grid.querySelector(`[data-param="${def.key}"]`);
@@ -1221,11 +1331,19 @@ function updateDashboard(rawValues) {
       card.dataset.param = def.key;
       card.title = `Abrir recurso didáctico de ${def.label}`;
       card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
+      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation" || def.key === "exposure") {
+        card.addEventListener("click", event => {
+          event.preventDefault();
+          openEducationalResource(def.key, card);
+        });
+      }
       grid.appendChild(card);
     }
     card.querySelector("span").textContent = def.label;
-    card.href = `${def.resource}?value=${encodeURIComponent(value)}`;
-    card.querySelector("strong").textContent = fmt(value, def.digits);
+    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation" || def.key === "exposure"
+      ? educationalResourceUrl(def.key, rawValues)
+      : `${def.resource}?value=${encodeURIComponent(value)}`;
+    card.querySelector("strong").textContent = fmt(displayValue, def.digits);
     card.querySelector("em").textContent = def.unit;
     const bar = card.querySelector(".bar i");
     bar.style.width = width;
@@ -2680,7 +2798,7 @@ function debugApplyPoliciesForYear(codes, year = 1) {
 
 function createReportChart(seriesKeys, values) {
   const colors = { pm25: "#ed2f2f", pm10: "#ef8b00", co2: "#69777f", nox: "#175bc9", o3: "#08a89c", cov: "#8d49b6", temp: "#ed2f2f", exposure: "#2d983f", acceptance: "#175bc9" };
-  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "CO₂", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temperatura", exposure: "Exposición", acceptance: "Aceptación" };
+  const labels = { pm25: "PM2.5", pm10: "PM10", co2: "CO₂ equivalente", nox: "NOx", o3: "O₃", cov: "COV", temp: "Temperatura", exposure: "Exposición", acceptance: "Aceptación" };
   const w = 720;
   const h = 300;
   const plot = { left: 52, right: 16, top: 18, bottom: 68 };
@@ -2701,10 +2819,11 @@ function createReportChart(seriesKeys, values) {
   svg += `<line x1="${plot.left}" y1="${plot.top}" x2="${plot.left}" y2="${plot.top + plotHeight}" stroke="#aebfc8"/><line x1="${plot.left}" y1="${plot.top + plotHeight}" x2="${w - plot.right}" y2="${plot.top + plotHeight}" stroke="#aebfc8"/>`;
 
   seriesKeys.forEach((key, index) => {
-    const base = values[0][key] || 1;
+    const chartValue = item => key === "co2" ? co2IndexToPpm(item[key]) : item[key];
+    const base = chartValue(values[0]) || 1;
     const coordinates = values.map(item => {
       const x = plot.left + (item.year / TOTAL_YEARS) * plotWidth;
-      const y = yFor(item[key] / base * 100);
+      const y = yFor(chartValue(item) / base * 100);
       return { x, y };
     });
     const points = coordinates.map(point => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
@@ -2732,7 +2851,8 @@ function buildReportHtml() {
   const evaluation = evaluatePlan(final);
   const implemented = getImplementedPolicies();
   const feedback = buildPlanFeedback(evaluation, final, implemented);
-  const averageReduction = ["pm25", "pm10", "co2", "nox", "cov"].reduce((total, key) => total + reduction(key, final), 0) / 5;
+  const co2DisplayReduction = 1 - (co2IndexToPpm(final.co2) / co2IndexToPpm(baseline.co2));
+  const averageReduction = (["pm25", "pm10", "nox", "cov"].reduce((total, key) => total + reduction(key, final), 0) + co2DisplayReduction) / 5;
   const exposureReduction = reduction("exposure", final);
   const ozoneIncrease = (final.o3 - baseline.o3) / baseline.o3;
   const impactParts = [
@@ -2771,7 +2891,7 @@ function buildReportHtml() {
   const rows = [
     { key: "pm25", label: "PM2.5", start: initial.pm25, end: final.pm25, unit: "µg/m³", digits: 1 },
     { key: "pm10", label: "PM10", start: initial.pm10, end: final.pm10, unit: "µg/m³", digits: 1 },
-    { key: "co2", label: "CO₂", start: initial.co2, end: final.co2, unit: "ppm", digits: 0 },
+    { key: "co2", label: "CO₂ equivalente", start: co2IndexToPpm(initial.co2), end: co2IndexToPpm(final.co2), unit: "ppm", digits: 0 },
     { key: "nox", label: "NOx", start: initial.nox, end: final.nox, unit: "ppb", digits: 0 },
     { key: "o3", label: "O₃", start: initial.o3, end: final.o3, unit: "ppb", digits: 1 },
     { key: "cov", label: "COV", start: initial.cov, end: final.cov, unit: "µg/m³", digits: 1 },
@@ -2803,6 +2923,7 @@ function buildReportHtml() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte final - Simulador de calidad de aire</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b8a5a'/%3E%3Cpath d='M12 44h40M18 44V24h10v20M34 44V16h12v28' stroke='white' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
     <style>
       :root{--navy:#082f3a;--ink:#102d38;--muted:#536b76;--line:#d7e3e8;--green:#239548;--green-soft:#eff9f2;--orange:#ef9300;--orange-soft:#fff8ec;--blue:#1764d4;--blue-soft:#f1f7ff}
       *{box-sizing:border-box}
@@ -2826,6 +2947,7 @@ function buildReportHtml() {
       .analysis-grid{display:grid;grid-template-columns:1.08fr .92fr;gap:16px;margin-bottom:16px}.chart-card,.table-card{padding:16px;overflow:hidden}.report-chart{display:block;width:100%;height:auto;margin-top:2px}
       .chart-summary{display:grid;border:1px solid var(--line);border-radius:7px;overflow:hidden}.chart-summary.six{grid-template-columns:repeat(6,1fr)}.chart-summary.three{grid-template-columns:repeat(3,1fr)}.chart-summary div{padding:7px 5px;text-align:center;border-right:1px solid var(--line);background:#f8fbfc}.chart-summary div:last-child{border-right:0}.chart-summary span{display:block;color:var(--muted);font-size:9px}.chart-summary strong{display:block;margin-top:3px;font-size:12px}.positive{color:#168844}.negative{color:#cf3c36}.neutral{color:#536b76}
       table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px 8px;border:1px solid var(--line);text-align:left;vertical-align:top}th{color:#183946;background:#eef4f6;font-weight:800}tbody tr:nth-child(even){background:#fbfdfe}.numeric{text-align:center;white-space:nowrap}
+      .method-note{margin:9px 0 0;padding:8px 9px;border-radius:7px;color:#526873;background:#eef5f7;font-size:9px;line-height:1.4}
       .insight-stack{display:grid;grid-template-columns:1fr 1fr;gap:12px}.insight{padding:15px}.insight.good{border-color:#cbe5d2;background:linear-gradient(135deg,#f3fbf5,#fff)}.insight.bad{border-color:#f2dcc1;background:linear-gradient(135deg,#fff9f0,#fff)}.insight.recommend{grid-column:1/-1;border-color:#c9dcf6;background:linear-gradient(135deg,#f3f8ff,#fff)}
       .insight h3{display:flex;gap:8px;align-items:center;margin:0 0 10px;font-family:"Arial Narrow","Segoe UI",Arial,sans-serif;font-size:17px;text-transform:uppercase}.insight.good h3{color:#218846}.insight.bad h3{color:#dc6d00}.insight.recommend h3{color:#155ab4}.insight ul{margin:0;padding-left:19px}.insight li{margin:7px 0;line-height:1.4}
       .policies{padding:16px;margin-bottom:16px}.policy-code{display:inline-grid;min-width:22px;height:22px;margin-right:6px;place-items:center;border-radius:50%;color:#fff;background:#239548;font-size:10px;font-weight:900}
@@ -2886,6 +3008,8 @@ function buildReportHtml() {
           <div class="table-scroll"><table><thead><tr><th>Variable</th><th class="numeric">Inicial</th><th class="numeric">Final año 5</th><th class="numeric">Cambio</th><th>Unidad</th></tr></thead><tbody>
             ${rows.map(row => `<tr><td>${row.label}</td><td class="numeric">${fmt(row.start,row.digits)}</td><td class="numeric">${fmt(row.end,row.digits)}</td><td class="numeric ${changeTone(row)}"><strong>${changeText(row.start,row.end)}</strong></td><td>${row.unit}</td></tr>`).join("")}
           </tbody></table></div>
+          <p class="method-note"><strong>Nota COV:</strong> los valores representan una concentración equivalente didáctica de COV reactivos. No son TVOC medido ni una clasificación sanitaria agregada; interpretar riesgo requiere conocer composición, método y tiempo de exposición.</p>
+          <p class="method-note"><strong>Nota Temperatura:</strong> representa temperatura exterior urbana del escenario. No es temperatura superficial, índice de calor, sensación térmica ni pronóstico; evaluar estrés térmico requiere variables adicionales.</p>
         </article>
       </section>
 
@@ -3022,13 +3146,15 @@ window.render_game_to_text = () => JSON.stringify({
   budget: { total: BUDGET, used: getBudgetUsed(), available: BUDGET - getBudgetUsed() },
   selectedPolicies: [...plannedPolicies],
   activePolicies: getActiveInstances().map(instance => instance.code),
+  educationalResource: { open: educationalResourceDialog.open, focus: educationalResourceFocus },
+  history: { points: state.history.length, years: state.history.map(point => Number(point.year.toFixed(2))) },
   report: {
     available: currentYear >= TOTAL_YEARS && !simulationRunning,
     status: currentYear >= TOTAL_YEARS ? evaluatePlan(calculateValues(TOTAL_YEARS)).status : null
   },
   metrics: (() => {
     const values = calculateValues(currentYear);
-    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, nox: values.nox, o3: values.o3, cov: values.cov, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
+    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, co2Index: values.co2, co2Ppm: Number(co2IndexToPpm(values.co2).toFixed(1)), nox: values.nox, o3: values.o3, cov: values.cov, wind: values.wind, hmix: values.hmix, ventilationRate: values.wind * values.hmix, vent: values.vent, stagnation: values.stagnation, exposure: values.exposure, vulnerable: values.vulnerable, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
   })()
 });
 
