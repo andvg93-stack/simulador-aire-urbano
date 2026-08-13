@@ -2461,6 +2461,120 @@
     if (!window.__vt_pending) requestAnimationFrame(animateDispersion);
   }
 
+  function renderExposureLab(root) {
+    const model = window.ExposureModel;
+    if (!model) { root.textContent = "No fue posible cargar el modelo de exposición."; return; }
+    const params = new URLSearchParams(location.search);
+    const embedded = params.get("embedded") === "1";
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const queryCurrent = params.has("current") ? Number(params.get("current")) : NaN;
+    const queryValue = params.has("value") ? Number(params.get("value")) : NaN;
+    const queryVulnerable = params.has("vulnerable") ? Number(params.get("vulnerable")) : NaN;
+    const hasCurrent = Number.isFinite(queryCurrent);
+    const hasLegacy = !hasCurrent && Number.isFinite(queryValue);
+    const currentExposure = clamp(hasCurrent ? queryCurrent : hasLegacy ? queryValue : model.baseline.exposure, model.limits.exposure[0], model.limits.exposure[1]);
+    const currentSusceptible = Number.isFinite(queryVulnerable) ? Math.max(0, Math.round(queryVulnerable)) : Math.round(currentExposure * model.susceptibleRatio);
+    const initialExposure = hasLegacy ? currentExposure : model.baseline.exposure;
+    const initialView = ["map", "day"].includes(params.get("view")) ? params.get("view") : "map";
+    const state = { view: initialView, exposure: initialExposure, permanence: model.baseline.permanenceHours, environment: "mixed", measure: "none", p10: false, susceptibility: "hidden", playing: !reducedMotion, phase: 0 };
+    const environments = {
+      homes: { label: "Hogares", note: "La distribución destaca viviendas; la cercanía por sí sola no define cuántas personas están expuestas." },
+      school: { label: "Colegio", note: "La distribución destaca el colegio y los desplazamientos escolares." },
+      work: { label: "Trabajo", note: "La distribución destaca lugares de trabajo y viajes cotidianos." },
+      mixed: { label: "Mixto", note: "La exposición diaria combina hogar, transporte, estudio, trabajo y espacios protegidos." }
+    };
+    const measureNames = { none: "Ninguna", P1: "Zona de bajas emisiones", P2: "Buses de baja emisión", P3: "Restricción vehicular", P4: "Movilidad activa", P5: "Arborización técnica", P6: "Corredores de ventilación", P7: "Control de polvo", P8: "Control de COV", P9: "Horarios escalonados" };
+    let lastScene = {};
+    function selectedMeasures() { return [...(state.measure === "none" ? [] : [state.measure]), ...(state.p10 ? ["P10"] : [])]; }
+    function experiment() { return model.evaluateExperiment({ exposure: state.exposure, permanenceHours: state.permanence, measures: selectedMeasures() }); }
+    function person(x, y, index, result, scale = 1) {
+      const protectedRepresentatives = Math.round(16 * result.reduction);
+      const protectedState = index < protectedRepresentatives;
+      const susceptible = index < Math.round(16 * model.susceptibleRatio);
+      const fill = protectedState ? "#21865b" : "#c44a3f";
+      const ring = state.susceptibility === "highlight" && susceptible ? `<circle cx="0" cy="-8" r="15" fill="none" stroke="#6f45a6" stroke-width="4"/>` : "";
+      return `<g class="exposure-person" data-person="${index + 1}" transform="translate(${x} ${y}) scale(${scale})">${ring}<circle cy="-13" r="7" fill="${fill}"/><path d="M0-5v21m-10-10L0 0l10 6M0 16l-8 14m8-14 8 14" fill="none" stroke="${fill}" stroke-width="5" stroke-linecap="round"/>${protectedState ? `<path d="M-13-25q13-12 26 0v12q0 18-13 25-13-7-13-25z" fill="#bce6cf" stroke="#21865b" stroke-width="2" opacity=".82"/>` : ""}</g>`;
+    }
+    function mapScene(result) {
+      const layouts = {
+        homes: [[475,85],[520,95],[570,82],[615,105],[475,145],[525,155],[575,145],[625,165],[440,235],[485,250],[535,235],[585,250],[630,235],[460,315],[535,315],[610,310]],
+        school: [[455,75],[495,85],[535,75],[575,90],[615,78],[465,135],[510,145],[555,135],[600,150],[640,135],[455,205],[500,215],[545,205],[590,220],[635,205],[590,310]],
+        work: [[430,72],[475,82],[520,72],[565,87],[610,75],[445,135],[490,145],[535,135],[580,150],[625,135],[450,235],[500,250],[550,235],[600,250],[530,315],[610,315]],
+        mixed: [[430,78],[500,88],[575,78],[635,98],[450,150],[520,145],[600,155],[660,145],[430,235],[500,250],[570,235],[640,250],[455,325],[525,315],[595,325],[660,310]]
+      };
+      const people = layouts[state.environment].map(([x,y], i) => person(x, y, i, result, .72)).join("");
+      const plumeOpacity = state.measure === "none" ? .28 : .14;
+      return { people: 16, protectedRepresentatives: Math.round(16 * result.reduction), hour: state.phase * 24, svg: svgFrame("Mapa urbano con una fuente, dirección de pluma y dieciséis personas representativas que cambian entre exposición y protección", `
+        <defs><marker id="exposure-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#c17b28"/></marker><linearGradient id="plume" x1="0" x2="1"><stop stop-color="#c44a3f" stop-opacity=".48"/><stop offset="1" stop-color="#c44a3f" stop-opacity="0"/></linearGradient></defs>
+        <rect width="720" height="400" fill="#e7f0e4"/><path d="M0 185h720" stroke="#48545b" stroke-width="70"/><path d="M0 185h720" stroke="#f2cf55" stroke-width="4" stroke-dasharray="18 18"/>
+        <g transform="translate(35 115)"><rect width="122" height="110" rx="9" fill="#768b94"/><rect x="20" y="-55" width="28" height="66" rx="4" fill="#596d76"/><text x="61" y="63" text-anchor="middle" font-size="13" font-weight="900" fill="white">FUENTE</text></g>
+        <path d="M145 132C300 70 455 80 700 120L700 250C450 245 290 225 145 195Z" fill="url(#plume)" opacity="${plumeOpacity}"/><line x1="185" y1="95" x2="365" y2="95" stroke="#c17b28" stroke-width="8" stroke-linecap="round" marker-end="url(#exposure-arrow)"/><text x="275" y="78" text-anchor="middle" font-size="12" font-weight="900" fill="#8b571c">TRANSPORTE DE LA PLUMA</text>
+        <g><rect x="405" y="25" width="120" height="74" rx="10" fill="#d7b38a" stroke="#9a764f"/><path d="M400 45l65-34 65 34" fill="#b15a4f"/><text x="465" y="72" text-anchor="middle" font-size="12" font-weight="900">HOGARES</text></g>
+        <g><rect x="548" y="25" width="135" height="74" rx="10" fill="#d9e6ef" stroke="#7192a8"/><path d="M615 9v28m-18-14h36" stroke="#7192a8" stroke-width="8"/><text x="615" y="72" text-anchor="middle" font-size="12" font-weight="900">COLEGIO</text></g>
+        <g><rect x="405" y="274" width="135" height="82" rx="10" fill="#d8dde0" stroke="#7b878d"/><rect x="430" y="292" width="22" height="24" fill="#9bb4c0"/><text x="472" y="340" text-anchor="middle" font-size="12" font-weight="900">TRABAJO</text></g>
+        <g><rect x="565" y="274" width="126" height="82" rx="18" fill="#bfe3ce" stroke="#4a9a6d"/>${tree(590,315,.45)}${tree(660,315,.45)}<text x="628" y="345" text-anchor="middle" font-size="11" font-weight="900" fill="#246b49">ESPACIO PROTEGIDO</text></g>
+        ${state.p10 ? `<g transform="translate(250 300)"><path d="M0 0h118v58H0z" fill="#fff4cf" stroke="#d39b28" stroke-width="3"/><text x="59" y="24" text-anchor="middle" font-size="12" font-weight="900" fill="#765112">ALERTA ACTIVA</text><text x="59" y="43" text-anchor="middle" font-size="10" fill="#765112">horarios y refugios</text></g>` : ""}${people}
+        <rect x="20" y="345" width="245" height="38" rx="19" fill="white" opacity=".95"/><text x="142" y="369" text-anchor="middle" font-size="12" font-weight="900" fill="#365a47">16 figuras permanecen visibles</text>
+      `, "#e7f0e4") };
+    }
+    function dayScene(result) {
+      const hour = state.phase * 24;
+      const stops = [{x:95,label:"HOGAR",color:"#d8b28a"},{x:275,label:"TRANSPORTE",color:"#7c8991"},{x:455,label:state.environment === "school" ? "COLEGIO" : "ESTUDIO / TRABAJO",color:"#9db8ca"},{x:625,label:"ESPACIO PROTEGIDO",color:"#9ed2b4"}];
+      const active = hour < 6 || hour >= 21 ? 0 : hour < 8 || hour >= 17 && hour < 19 ? 1 : hour < 17 ? 2 : 3;
+      const travel = ((state.phase * 4) % 1);
+      const next = (active + 1) % 4;
+      const centerX = active === 1 ? stops[0].x + (stops[2].x - stops[0].x) * travel : stops[active].x;
+      const people = Array.from({length:16}, (_,i) => person(centerX + ((i%4)-1.5)*18, 222 + Math.floor(i/4)*30, i, result, .58)).join("");
+      const exposedWidth = 600 * (state.permanence / 24);
+      return { people: 16, protectedRepresentatives: Math.round(16 * result.reduction), hour, activeStop: stops[active].label, svg: svgFrame("Recorrido determinista de veinticuatro horas entre hogar, transporte, estudio o trabajo y espacio protegido", `
+        <rect width="720" height="400" fill="#f4f5ee"/><text x="30" y="36" font-size="14" font-weight="900" fill="#355b47">DÍA DE EXPOSICIÓN · ${fmt(hour,1)} h</text>
+        <line x1="70" y1="120" x2="650" y2="120" stroke="#cbd6cf" stroke-width="12" stroke-linecap="round"/>${stops.map((s,i)=>`<g><circle cx="${s.x}" cy="120" r="28" fill="${s.color}" stroke="${i===active ? "#235f45" : "white"}" stroke-width="${i===active ? 6 : 3}"/><text x="${s.x}" y="164" text-anchor="middle" font-size="10" font-weight="900" fill="#43564b">${s.label}</text></g>`).join("")}
+        <path d="M${centerX-20} 185h40l-20 22z" fill="#235f45"/>${people}
+        <rect x="50" y="342" width="620" height="18" rx="9" fill="#dce5df"/><rect x="50" y="342" width="${exposedWidth}" height="18" rx="9" fill="#c44a3f"/><line x1="${50+600*state.phase}" y1="330" x2="${50+600*state.phase}" y2="370" stroke="#17202a" stroke-width="4"/>
+        ${[0,6,12,18,24].map((h,i)=>`<text x="${50+i*150}" y="388" text-anchor="middle" font-size="11" fill="#5f6f66">${h} h</text>`).join("")}<text x="360" y="326" text-anchor="middle" font-size="12" font-weight="900" fill="#9f3e35">${fmt(state.permanence,0)} h/día bajo exposición relevante</text>
+      `, "#f4f5ee") };
+    }
+    function buildScene(result) { return state.view === "map" ? mapScene(result) : dayScene(result); }
+    const closeLabel = embedded ? "Cerrar laboratorio" : "Volver al simulador";
+    root.className = "resource-shell exposure-lab";
+    root.innerHTML = `
+      <nav class="resource-nav" aria-label="Navegación del recurso"><button class="back" id="exposure-close" type="button">← ${closeLabel}</button><span class="resource-tag">Laboratorio de exposición</span></nav>
+      <header class="resource-header particulate-header"><div><p class="eyebrow">Ubicación, concentración y tiempo</p><h1>¿Cuántas personas permanecen expuestas?</h1><p class="lead">Explora cómo las medidas urbanas y la gestión dirigida cambian la exposición sin confundirla con concentración o enfermedad.</p></div><div class="header-mark" aria-hidden="true">●●●</div></header>
+      <section class="exposure-current" aria-label="Estado actual transferido"><div><span>Población actual</span><strong>${fmt(currentExposure,0)} habitantes</strong></div><div><span>Subgrupo susceptible actual</span><strong>${fmt(currentSusceptible,0)}</strong><small>contexto didáctico, no censo</small></div><p>El experimento parte de ${fmt(initialExposure,0)} habitantes y no vuelve a aplicar automáticamente las políticas del plan.</p></section>
+      <div class="view-tabs exposure-tabs" role="tablist" aria-label="Vista del laboratorio"><button type="button" role="tab" data-exposure-view="map">Mapa urbano</button><button type="button" role="tab" data-exposure-view="day">Día de exposición</button></div>
+      <section class="particulate-workspace exposure-workspace"><article class="card scene-card particulate-scene-card"><div class="card-head"><div><h2>Escena sincronizada</h2><p id="exposure-scene-description"></p></div><span class="live-badge" id="exposure-live"></span></div><div class="particulate-scene" id="exposure-scene"></div><div class="scene-legend"><span class="legend-item"><i class="legend-dot" style="--dot:#c44a3f"></i>Bajo exposición relevante</span><span class="legend-item"><i class="legend-dot" style="--dot:#21865b"></i>Protegida por medidas</span><span class="legend-item"><i class="legend-dot" style="--dot:#6f45a6"></i>Mayor susceptibilidad</span></div></article>
+      <aside class="card control-card particulate-controls exposure-controls"><h2>Experimenta</h2>
+        <div class="control-group"><label class="control-label" for="exposure-population"><span>Población experimental</span><span class="control-readout" id="exposure-population-readout"></span></label><input id="exposure-population" type="range" min="27300" max="80000" step="100"><div class="range-labels"><span>27.300</span><span>80.000 habitantes</span></div></div>
+        <div class="control-group"><label class="control-label" for="exposure-hours"><span>Permanencia promedio</span><span class="control-readout" id="exposure-hours-readout"></span></label><input id="exposure-hours" type="range" min="2" max="16" step="1"><div class="range-labels"><span>2 h/día</span><span>16 h/día</span></div></div>
+        <div class="exposure-select-grid"><div class="control-group"><label class="control-label" for="exposure-environment"><span>Entorno dominante</span></label><select class="select-control" id="exposure-environment"><option value="homes">Hogares</option><option value="school">Colegio</option><option value="work">Trabajo</option><option value="mixed">Mixto</option></select></div><div class="control-group"><label class="control-label" for="exposure-measure"><span>Medida urbana</span></label><select class="select-control" id="exposure-measure">${Object.entries(measureNames).map(([value,label])=>`<option value="${value}">${value === "none" ? label : `${value} · ${label}`}</option>`).join("")}</select></div></div>
+        <label class="exposure-toggle"><input type="checkbox" id="exposure-p10"><span><strong>Gestión dirigida P10</strong><small>Alertas, horarios y espacios protegidos · −18 %</small></span></label>
+        <label class="exposure-toggle"><input type="checkbox" id="exposure-susceptibility"><span><strong>Destacar mayor susceptibilidad</strong><small>Solo cambia la capa explicativa.</small></span></label>
+        <div class="playback-controls"><button id="exposure-play" type="button"></button><button class="secondary" id="exposure-reset" type="button">Restablecer</button></div><p class="didactic-note">Las figuras son representativas: su número permanece fijo. Cambian de ubicación o condición, no desaparecen.</p>
+      </aside></section>
+      <section class="exposure-results" aria-label="Resultados"><article class="card exposure-result-main"><p>Población después</p><strong id="exposure-after"></strong><span id="exposure-summary"></span></article><article class="card exposure-result-card"><p>Antes → después</p><strong><span id="exposure-before"></span> → <b id="exposure-after-small"></b></strong><small id="exposure-reduction"></small></article><article class="card exposure-result-card"><p>Personas protegidas</p><strong id="exposure-protected"></strong><small>fuera de exposición relevante</small></article><article class="card exposure-result-card"><p>Persona-horas/día</p><strong id="exposure-person-hours"></strong><small id="exposure-person-hours-before"></small></article><article class="card exposure-result-card"><p>Mayor susceptibilidad</p><strong id="exposure-susceptible"></strong><small>misma proporción didáctica 18.000 / 78.000</small></article></section>
+      <section class="particulate-info-grid"><article class="card info-card"><span class="info-icon" aria-hidden="true">C×t</span><h2>Concentración y tiempo</h2><p>La exposición combina cuánto contaminante hay, dónde está la persona y durante cuánto tiempo permanece allí.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">↔</span><h2>No hay distancia universal</h2><p>La influencia de una vía también depende del tráfico, la dirección del aire, la topografía y el uso del suelo.</p></article><article class="card info-card"><span class="info-icon" aria-hidden="true">P10</span><h2>Gestionar no es emitir menos</h2><p>P10 cambia horarios, alertas o acceso a refugios; por eso reduce exposición sin reducir visualmente la fuente.</p></article></section>
+      <section class="reference-note"><strong>Lectura correcta:</strong> la población es una cifra didáctica del escenario; persona-horas no es dosis inhalada y el subgrupo susceptible no es una estimación demográfica ni clínica.</section>`;
+    const elements = { scene: document.getElementById("exposure-scene"), population: document.getElementById("exposure-population"), hours: document.getElementById("exposure-hours"), environment: document.getElementById("exposure-environment"), measure: document.getElementById("exposure-measure"), p10: document.getElementById("exposure-p10"), susceptibility: document.getElementById("exposure-susceptibility"), play: document.getElementById("exposure-play") };
+    function renderScene() { const result = experiment(); lastScene = buildScene(result); elements.scene.innerHTML = lastScene.svg; document.getElementById("exposure-scene-description").textContent = state.view === "map" ? environments[state.environment].note : `Recorrido de 24 horas; el reloj está en ${fmt(lastScene.hour,1)} h y conserva ${fmt(state.permanence,0)} h/día de permanencia.`; }
+    function render() {
+      const result = experiment();
+      Object.assign(elements.population,{value:state.exposure}); Object.assign(elements.hours,{value:state.permanence}); elements.environment.value=state.environment; elements.measure.value=state.measure; elements.p10.checked=state.p10; elements.susceptibility.checked=state.susceptibility==="highlight";
+      document.getElementById("exposure-population-readout").textContent=`${fmt(state.exposure,0)} habitantes`; document.getElementById("exposure-hours-readout").textContent=`${fmt(state.permanence,0)} h/día`;
+      document.querySelectorAll("[data-exposure-view]").forEach(button=>{const active=button.dataset.exposureView===state.view;button.classList.toggle("active",active);button.setAttribute("aria-selected",String(active));button.tabIndex=active?0:-1;});
+      elements.play.textContent=state.playing?"Pausar":"Reproducir"; elements.play.setAttribute("aria-pressed",String(state.playing)); document.getElementById("exposure-live").textContent=state.playing?"En movimiento":"En pausa";
+      document.getElementById("exposure-after").textContent=`${fmt(result.after,0)} habitantes`; document.getElementById("exposure-summary").textContent=result.protectedPeople?`${fmt(result.protectedPeople,0)} personas menos bajo exposición relevante`:"Sin cambio respecto al escenario experimental";
+      document.getElementById("exposure-before").textContent=fmt(result.before,0);document.getElementById("exposure-after-small").textContent=fmt(result.after,0);document.getElementById("exposure-reduction").textContent=result.reduction?`Reducción de ${fmt(result.reduction*100,0)} %`:"Sin cambio";document.getElementById("exposure-protected").textContent=fmt(result.protectedPeople,0);document.getElementById("exposure-person-hours").textContent=fmt(result.personHoursAfter,0);document.getElementById("exposure-person-hours-before").textContent=`Antes: ${fmt(result.personHoursBefore,0)}`;document.getElementById("exposure-susceptible").textContent=`${fmt(result.susceptibleBefore,0)} → ${fmt(result.susceptibleAfter,0)}`; renderScene();
+    }
+    const tabs=[...document.querySelectorAll("[data-exposure-view]")];tabs.forEach((button,index)=>{button.addEventListener("click",()=>{state.view=button.dataset.exposureView;render();});button.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight"].includes(event.key))return;event.preventDefault();const next=(index+(event.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length;tabs[next].click();tabs[next].focus();});});
+    elements.population.addEventListener("input",()=>{state.exposure=Number(elements.population.value);render();});elements.hours.addEventListener("input",()=>{state.permanence=Number(elements.hours.value);render();});elements.environment.addEventListener("change",()=>{state.environment=elements.environment.value;render();});elements.measure.addEventListener("change",()=>{state.measure=elements.measure.value;render();});elements.p10.addEventListener("change",()=>{state.p10=elements.p10.checked;render();});elements.susceptibility.addEventListener("change",()=>{state.susceptibility=elements.susceptibility.checked?"highlight":"hidden";render();});elements.play.addEventListener("click",()=>{state.playing=!state.playing;render();});
+    document.getElementById("exposure-reset").addEventListener("click",()=>{Object.assign(state,{view:"map",exposure:model.baseline.exposure,permanence:model.baseline.permanenceHours,environment:"mixed",measure:"none",p10:false,susceptibility:"hidden",playing:!reducedMotion,phase:0});render();});
+    document.getElementById("exposure-close").addEventListener("click",()=>{if(embedded&&window.parent!==window)window.parent.postMessage({type:"educational-resource:close"},location.origin);else if(document.referrer&&new URL(document.referrer).origin===location.origin&&history.length>1)history.back();else location.href="index.html";});
+    window.addEventListener("keydown",event=>{if(event.key==="Escape"&&embedded&&window.parent!==window){event.preventDefault();window.parent.postMessage({type:"educational-resource:close"},location.origin);}});
+    function renderResourceToText(){const result=experiment();return JSON.stringify({resource:"exposure",view:state.view,coordinateSystem:"SVG viewBox 720x400; origen arriba a la izquierda; x hacia la derecha, y hacia abajo",current:{exposedPeople:Math.round(currentExposure),susceptiblePeople:currentSusceptible},experiment:{before:result.before,after:result.after,protectedPeople:result.protectedPeople,reductionPercent:Number((result.reduction*100).toFixed(2)),permanenceHours:result.permanenceHours,personHoursBefore:result.personHoursBefore,personHoursAfter:result.personHoursAfter,susceptibleBefore:result.susceptibleBefore,susceptibleAfter:result.susceptibleAfter,environment:state.environment,urbanMeasure:state.measure,p10:state.p10,measures:result.selected,susceptibilityLayer:state.susceptibility},animation:{playing:state.playing,phase:Number(state.phase.toFixed(3)),simulatedHour:Number((state.phase*24).toFixed(2))},visible:{representativePeople:lastScene.people||0,protectedRepresentatives:lastScene.protectedRepresentatives||0,activeStop:lastScene.activeStop||null}});}
+    window.RESOURCE={kind:"urban-population-exposure"};window.render_resource_to_text=renderResourceToText;window.render_game_to_text=renderResourceToText;window.advanceTime=ms=>{if(state.playing)state.phase=(state.phase+Math.max(0,Number(ms)||0)/6000)%1;renderScene();return renderResourceToText();};
+    let lastFrame=performance.now();function animateExposure(now){const delta=Math.min(50,Math.max(0,now-lastFrame));lastFrame=now;if(state.playing){state.phase=(state.phase+delta/6000)%1;renderScene();}requestAnimationFrame(animateExposure);}render();if(!window.__vt_pending)requestAnimationFrame(animateExposure);
+  }
+
   const key = document.body.dataset.resource;
   const root = document.getElementById("resource-app");
   if (!root) return;
@@ -2497,6 +2611,11 @@
 
   if (key === "dispersion") {
     renderDispersionLab(root);
+    return;
+  }
+
+  if (key === "exposure") {
+    renderExposureLab(root);
     return;
   }
 

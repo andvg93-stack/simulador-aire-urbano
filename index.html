@@ -775,6 +775,7 @@
 <script src="road-layout.js"></script>
 <script src="modelo-nox.js?v=4"></script>
 <script src="modelo-dispersion.js?v=1"></script>
+<script src="modelo-exposicion.js?v=1"></script>
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -806,23 +807,23 @@ const baseline = {
   hmix: DispersionModel.baseline.hmix,
   vent: baselineDispersion.ventilation,
   stagnation: baselineDispersion.stagnation,
-  exposure: 78000,
-  vulnerable: 18000,
+  exposure: ExposureModel.baseline.exposure,
+  vulnerable: ExposureModel.baseline.susceptible,
   acceptance: 70,
   equity: 45
 };
 
 const policies = [
-  { code: "P1", name: "Zona de bajas emisiones", cost: 35, implementation: 3, degradation: null, acceptance: -12, equity: 8, description: "Restringe vehículos altamente contaminantes en el centro.", effects: NoxModel.mergePolicyEffects("P1", { pm25: -0.18, pm10: -0.12, co2: -0.10, hmix: 0, exposure: -0.12 }) },
-  { code: "P2", name: "Buses eléctricos o de baja emisión", cost: 45, implementation: 5, degradation: null, acceptance: 5, equity: 12, description: "Reduce emisiones del transporte público.", effects: NoxModel.mergePolicyEffects("P2", { pm25: -0.18, pm10: -0.10, co2: -0.15, hmix: 0, exposure: -0.12 }) },
-  { code: "P3", name: "Restricción vehicular parcial", cost: 15, implementation: 1, degradation: null, acceptance: -20, equity: -8, description: "Reduce temporalmente circulación de vehículos particulares.", effects: NoxModel.mergePolicyEffects("P3", { pm25: -0.08, pm10: -0.05, co2: -0.05, hmix: 0, exposure: -0.05 }) },
-  { code: "P4", name: "Ciclorrutas y vías peatonales", cost: 30, implementation: 3, degradation: null, acceptance: 8, equity: 10, description: "Disminuye viajes cortos motorizados.", effects: NoxModel.mergePolicyEffects("P4", { pm25: -0.08, pm10: -0.05, co2: -0.07, hmix: 0, exposure: -0.06 }) },
-  { code: "P5", name: "Arborización urbana técnica", cost: 25, implementation: 5, degradation: null, acceptance: 12, equity: 8, description: "Aumenta cobertura vegetal y reduce isla de calor.", effects: NoxModel.mergePolicyEffects("P5", { pm25: -0.05, pm10: -0.08, co2: -0.03, hmix: 0.05, exposure: -0.07 }) },
-  { code: "P6", name: "Corredores urbanos de ventilación", cost: 30, implementation: 5, degradation: null, acceptance: -5, equity: 6, description: "Reduce bloqueo del flujo de aire en zonas densas.", effects: NoxModel.mergePolicyEffects("P6", { pm25: -0.10, pm10: -0.10, co2: 0, hmix: 0.15, exposure: -0.10 }) },
-  { code: "P7", name: "Control de obras y polvo", cost: 15, implementation: 1, degradation: 7, acceptance: 4, equity: 4, description: "Reduce PM10 por obras, vías destapadas y material particulado grueso.", effects: { pm25: -0.02, pm10: -0.22, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.04 } },
-  { code: "P8", name: "Control de COV", cost: 20, implementation: 3, degradation: 5, acceptance: -4, equity: 3, description: "Reduce precursores de ozono en comercio e industria liviana.", effects: NoxModel.mergePolicyEffects("P8", { pm25: -0.03, pm10: -0.02, co2: 0, hmix: 0, exposure: -0.05 }) },
-  { code: "P9", name: "Teletrabajo y horarios escalonados", cost: 10, implementation: 1, degradation: 6, acceptance: 5, equity: 2, description: "Reduce congestión en horas pico.", effects: NoxModel.mergePolicyEffects("P9", { pm25: -0.06, pm10: -0.04, co2: -0.05, hmix: 0, exposure: -0.10 }) },
-  { code: "P10", name: "Alertas y gestión de exposición", cost: 10, implementation: 1, degradation: 1, acceptance: 10, equity: 15, description: "Reduce exposición de población vulnerable sin reducir emisiones.", effects: { pm25: 0, pm10: 0, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: -0.18 } }
+  { code: "P1", name: "Zona de bajas emisiones", cost: 35, implementation: 3, degradation: null, acceptance: -12, equity: 8, description: "Restringe vehículos altamente contaminantes en el centro.", effects: NoxModel.mergePolicyEffects("P1", { pm25: -0.18, pm10: -0.12, co2: -0.10, hmix: 0, exposure: ExposureModel.effectFor("P1") }) },
+  { code: "P2", name: "Buses eléctricos o de baja emisión", cost: 45, implementation: 5, degradation: null, acceptance: 5, equity: 12, description: "Reduce emisiones del transporte público.", effects: NoxModel.mergePolicyEffects("P2", { pm25: -0.18, pm10: -0.10, co2: -0.15, hmix: 0, exposure: ExposureModel.effectFor("P2") }) },
+  { code: "P3", name: "Restricción vehicular parcial", cost: 15, implementation: 1, degradation: null, acceptance: -20, equity: -8, description: "Reduce temporalmente circulación de vehículos particulares.", effects: NoxModel.mergePolicyEffects("P3", { pm25: -0.08, pm10: -0.05, co2: -0.05, hmix: 0, exposure: ExposureModel.effectFor("P3") }) },
+  { code: "P4", name: "Ciclorrutas y vías peatonales", cost: 30, implementation: 3, degradation: null, acceptance: 8, equity: 10, description: "Disminuye viajes cortos motorizados.", effects: NoxModel.mergePolicyEffects("P4", { pm25: -0.08, pm10: -0.05, co2: -0.07, hmix: 0, exposure: ExposureModel.effectFor("P4") }) },
+  { code: "P5", name: "Arborización urbana técnica", cost: 25, implementation: 5, degradation: null, acceptance: 12, equity: 8, description: "Aumenta cobertura vegetal y reduce isla de calor.", effects: NoxModel.mergePolicyEffects("P5", { pm25: -0.05, pm10: -0.08, co2: -0.03, hmix: 0.05, exposure: ExposureModel.effectFor("P5") }) },
+  { code: "P6", name: "Corredores urbanos de ventilación", cost: 30, implementation: 5, degradation: null, acceptance: -5, equity: 6, description: "Reduce bloqueo del flujo de aire en zonas densas.", effects: NoxModel.mergePolicyEffects("P6", { pm25: -0.10, pm10: -0.10, co2: 0, hmix: 0.15, exposure: ExposureModel.effectFor("P6") }) },
+  { code: "P7", name: "Control de obras y polvo", cost: 15, implementation: 1, degradation: 7, acceptance: 4, equity: 4, description: "Reduce PM10 por obras, vías destapadas y material particulado grueso.", effects: { pm25: -0.02, pm10: -0.22, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: ExposureModel.effectFor("P7") } },
+  { code: "P8", name: "Control de COV", cost: 20, implementation: 3, degradation: 5, acceptance: -4, equity: 3, description: "Reduce precursores de ozono en comercio e industria liviana.", effects: NoxModel.mergePolicyEffects("P8", { pm25: -0.03, pm10: -0.02, co2: 0, hmix: 0, exposure: ExposureModel.effectFor("P8") }) },
+  { code: "P9", name: "Teletrabajo y horarios escalonados", cost: 10, implementation: 1, degradation: 6, acceptance: 5, equity: 2, description: "Reduce congestión en horas pico.", effects: NoxModel.mergePolicyEffects("P9", { pm25: -0.06, pm10: -0.04, co2: -0.05, hmix: 0, exposure: ExposureModel.effectFor("P9") }) },
+  { code: "P10", name: "Alertas y gestión de exposición", cost: 10, implementation: 1, degradation: 1, acceptance: 10, equity: 15, description: "Reduce exposición de población vulnerable sin reducir emisiones.", effects: { pm25: 0, pm10: 0, nox: 0, cov: 0, co2: 0, temp: 0, wind: 0, hmix: 0, exposure: ExposureModel.effectFor("P10") } }
 ];
 
 const paramDefinitions = [
@@ -837,7 +838,7 @@ const paramDefinitions = [
   { key: "hmix", label: "Altura mezcla", unit: "m", min: 70, max: 220, digits: 0, resource: "recurso-altura-mezcla.html" },
   { key: "vent", label: "Índice ventilación", unit: "0-100", min: 0, max: 100, digits: 0, resource: "recurso-indice-ventilacion.html" },
   { key: "stagnation", label: "Estancamiento", unit: "0-100", min: 0, max: 100, digits: 0, inverse: true, resource: "recurso-estancamiento.html" },
-  { key: "exposure", label: "Población expuesta", unit: "hab.", min: 30000, max: 80000, digits: 0, inverse: true, resource: "recurso-exposicion.html" }
+  { key: "exposure", label: "Población expuesta", unit: "hab.", min: 27300, max: 80000, digits: 0, inverse: true, resource: "recurso-exposicion.html" }
 ];
 
 const plannedPolicies = new Set();
@@ -933,6 +934,11 @@ function educationalResourceUrl(resource, values, embedded = false) {
     if (embedded) params.set("embedded", "1");
     return `recurso-dispersion-atmosferica.html?${params.toString()}`;
   }
+  if (resource === "exposure") {
+    const params = new URLSearchParams({ current: Number(values.exposure).toFixed(0), vulnerable: Number(values.vulnerable).toFixed(0) });
+    if (embedded) params.set("embedded", "1");
+    return `recurso-exposicion.html?${params.toString()}`;
+  }
   const current = resource === "nox" ? values.nox : resource === "o3" ? values.o3 : resource === "cov" ? values.cov : resource === "temp" ? values.temp : values.co2;
   const params = new URLSearchParams({ current: Number(current).toFixed(1) });
   if (embedded) params.set("embedded", "1");
@@ -950,7 +956,8 @@ function openEducationalResource(resource, trigger) {
   const cov = resource === "cov";
   const temperature = resource === "temp";
   const dispersion = ["wind", "hmix", "vent", "stagnation"].includes(resource);
-  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : nox ? "Laboratorio de NOx y ozono" : ozone ? "Laboratorio de ozono troposférico" : cov ? "Laboratorio de compuestos orgánicos volátiles" : temperature ? "Laboratorio de temperatura urbana" : dispersion ? "Laboratorio de dispersión atmosférica" : "Laboratorio de emisiones de CO₂";
+  const exposure = resource === "exposure";
+  educationalResourceTitle.textContent = particulate ? "Laboratorio de material particulado" : nox ? "Laboratorio de NOx y ozono" : ozone ? "Laboratorio de ozono troposférico" : cov ? "Laboratorio de compuestos orgánicos volátiles" : temperature ? "Laboratorio de temperatura urbana" : dispersion ? "Laboratorio de dispersión atmosférica" : exposure ? "Laboratorio de población expuesta" : "Laboratorio de emisiones de CO₂";
   educationalResourceDescription.textContent = particulate
     ? "Compara PM2.5 y PM10 sin modificar tu plan ambiental."
     : nox
@@ -963,8 +970,10 @@ function openEducationalResource(resource, trigger) {
             ? "Explora energía urbana, temperatura del aire, exposición y química sin modificar tu plan."
             : dispersion
               ? "Relaciona viento, mezcla, ventilación y estancamiento sin modificar tu plan."
-            : "Distingue emisiones urbanas y concentración atmosférica sin modificar tu plan.";
-  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : nox ? "Laboratorio de NOx, NO₂ y formación de ozono" : ozone ? "Laboratorio de formación, transporte y exposición a ozono" : cov ? "Laboratorio de fuentes, control y destino de COV" : temperature ? "Laboratorio de temperatura, energía urbana y exposición" : dispersion ? "Laboratorio de transporte, mezcla, ventilación y estancamiento" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
+              : exposure
+                ? "Explora ubicación, permanencia y medidas de protección sin modificar tu plan."
+                : "Distingue emisiones urbanas y concentración atmosférica sin modificar tu plan.";
+  educationalResourceFrame.title = particulate ? "Laboratorio comparativo de PM2.5 y PM10" : nox ? "Laboratorio de NOx, NO₂ y formación de ozono" : ozone ? "Laboratorio de formación, transporte y exposición a ozono" : cov ? "Laboratorio de fuentes, control y destino de COV" : temperature ? "Laboratorio de temperatura, energía urbana y exposición" : dispersion ? "Laboratorio de transporte, mezcla, ventilación y estancamiento" : exposure ? "Laboratorio de población expuesta y gestión dirigida" : "Laboratorio de emisiones urbanas y CO₂ atmosférico";
   educationalResourceFrame.src = educationalResourceUrl(resource, values, true);
   if (!educationalResourceDialog.open) educationalResourceDialog.showModal();
   educationalResourceClose.focus();
@@ -1078,7 +1087,7 @@ function calculateValues(year) {
     vent,
     stagnation,
     exposure,
-    vulnerable: baseline.vulnerable * clamp(exposure / baseline.exposure, 0.35, 1.05),
+    vulnerable: exposure * ExposureModel.susceptibleRatio,
     acceptance,
     equity
   };
@@ -1322,7 +1331,7 @@ function updateDashboard(rawValues) {
       card.dataset.param = def.key;
       card.title = `Abrir recurso didáctico de ${def.label}`;
       card.innerHTML = `<span></span><strong></strong><em></em><div class="bar"><i></i></div>`;
-      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation") {
+      if (def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation" || def.key === "exposure") {
         card.addEventListener("click", event => {
           event.preventDefault();
           openEducationalResource(def.key, card);
@@ -1331,7 +1340,7 @@ function updateDashboard(rawValues) {
       grid.appendChild(card);
     }
     card.querySelector("span").textContent = def.label;
-    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation"
+    card.href = def.key === "pm25" || def.key === "pm10" || def.key === "co2" || def.key === "nox" || def.key === "o3" || def.key === "cov" || def.key === "temp" || def.key === "wind" || def.key === "hmix" || def.key === "vent" || def.key === "stagnation" || def.key === "exposure"
       ? educationalResourceUrl(def.key, rawValues)
       : `${def.resource}?value=${encodeURIComponent(value)}`;
     card.querySelector("strong").textContent = fmt(displayValue, def.digits);
@@ -3145,7 +3154,7 @@ window.render_game_to_text = () => JSON.stringify({
   },
   metrics: (() => {
     const values = calculateValues(currentYear);
-    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, co2Index: values.co2, co2Ppm: Number(co2IndexToPpm(values.co2).toFixed(1)), nox: values.nox, o3: values.o3, cov: values.cov, wind: values.wind, hmix: values.hmix, ventilationRate: values.wind * values.hmix, vent: values.vent, stagnation: values.stagnation, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
+    return { pm25: values.pm25, pm10: values.pm10, co2: values.co2, co2Index: values.co2, co2Ppm: Number(co2IndexToPpm(values.co2).toFixed(1)), nox: values.nox, o3: values.o3, cov: values.cov, wind: values.wind, hmix: values.hmix, ventilationRate: values.wind * values.hmix, vent: values.vent, stagnation: values.stagnation, exposure: values.exposure, vulnerable: values.vulnerable, acceptance: values.acceptance, aqi: estimatedAqi(values.pm25) };
   })()
 });
 

@@ -4,6 +4,7 @@ const vm = require("vm");
 const INDEX_PATH = "index.html";
 const NOX_MODEL_PATH = "modelo-nox.js";
 const DISPERSION_MODEL_PATH = "modelo-dispersion.js";
+const EXPOSURE_MODEL_PATH = "modelo-exposicion.js";
 const JSON_OUT = "policy-audit-report.json";
 const MD_OUT = "policy-audit-summary.md";
 const CSV_OUT = "policy-audit-combinations.csv";
@@ -21,6 +22,7 @@ function readIndexModel() {
   context.window = context;
   vm.runInNewContext(fs.readFileSync(NOX_MODEL_PATH, "utf8"), context);
   vm.runInNewContext(fs.readFileSync(DISPERSION_MODEL_PATH, "utf8"), context);
+  vm.runInNewContext(fs.readFileSync(EXPOSURE_MODEL_PATH, "utf8"), context);
   context.baselineDispersion = vm.runInNewContext(extractConst(source, "baselineDispersion"), context);
   const baseline = vm.runInNewContext(`(${extractConst(source, "baseline")})`, context);
   const policies = vm.runInNewContext(`(${extractConst(source, "policies")})`, context);

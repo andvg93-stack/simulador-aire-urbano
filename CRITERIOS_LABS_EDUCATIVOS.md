@@ -213,6 +213,26 @@ La implementación debe calcular las combinaciones con la misma función del sim
 
 - [Ministerio de Ambiente y Desarrollo Sostenible, Resolución 2254 de 2017](https://www.minambiente.gov.co/wp-content/uploads/2021/10/Resolucion-2254-de-2017.pdf)
 
+# Aplicación de los criterios: Población expuesta
+
+## Decisiones de implementación
+
+- La métrica principal se mantiene en habitantes y se denomina **Población expuesta**. No se interpreta como concentración, enfermedad, censo ni semáforo sanitario.
+- Se elimina la conversión automática distancia→habitantes. La población experimental se controla directamente entre 27.300 y 80.000 habitantes.
+- `modelo-exposicion.js` es la fuente compartida para la base de 78.000 habitantes, la proporción susceptible 18.000/78.000, los efectos P1–P10, el límite inferior de 35 % y los resultados antes/después.
+- Las dos vistas conservan 16 figuras representativas. Las personas cambian de condición o ubicación; nunca desaparecen al mejorar el resultado.
+- El mapa relaciona fuente, pluma, hogares, colegio, trabajo y espacio protegido. La vista diaria usa un ciclo determinista de 6.000 ms equivalente a 24 horas.
+- La permanencia modifica persona-horas, pero no inventa cambios en la cantidad de habitantes. El entorno y la capa de susceptibilidad son controles explicativos sin efecto numérico.
+- P10 se representa mediante alertas, horarios y espacios protegidos y no atenúa la fuente; las demás medidas urbanas aplican sus coeficientes compartidos.
+- `current` transfiere el estado del simulador y conserva un experimento base independiente; `value` mantiene compatibilidad e inicializa ambos. También se aceptan `vulnerable`, `view` y `embedded`.
+- El recurso abre en el diálogo educativo y cierra por control interno, control externo, Escape o mensaje, preservando plan, presupuesto, año, historial y foco.
+
+## Criterios de lectura
+
+La exposición depende de concentración, ubicación y patrones de tiempo-actividad. La distancia a una vía se conserva como elemento visual, pero no se usa como una relación universal, pues también intervienen tráfico, meteorología, topografía y uso del suelo. Persona-horas es una comparación educativa y no una dosis inhalada. La susceptibilidad es contexto secundario y no un puntaje clínico.
+
+Fuentes de contexto: [EPA, Human Exposure Modeling Overview](https://www.epa.gov/fera/human-exposure-modeling-overview), [EPA, Near Roadway Air Pollution FAQ](https://www.epa.gov/sites/default/files/2015-11/documents/420f14044_0.pdf) y [OMS, grupos en mayor riesgo](https://www.who.int/publications/i/item/B09563).
+
 ## Plan integrado: viento, altura de mezcla, ventilación y estancamiento
 
 - Un único laboratorio explicará la cadena causal: viento y altura de mezcla son entradas físicas; el coeficiente de ventilación y el estancamiento son resultados derivados.

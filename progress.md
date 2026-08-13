@@ -237,3 +237,17 @@ Original prompt: Mejorar la UI para acercarla a la imagen de referencia, verific
 - Auditoría de balance: el script compartido usa `DispersionModel`; se mantienen 370 combinaciones y 39 planes aceptables. P1 ya no modifica meteorología; P5 produce 10,69/89,31 y P6 14,69/85,31.
 - Regresión final: cliente determinista oficial ejecutado sobre PM2.5/PM10, CO₂, NOx, O₃, COV, Temperatura y Dispersión, sin errores de consola.
 - Pendientes conocidos: ninguno dentro del alcance del laboratorio integrado de dispersión.
+
+## Laboratorio de población expuesta
+
+- Rama de trabajo: `codex/recurso-poblacion-expuesta`.
+- Se creó `modelo-exposicion.js` como fuente compartida de base, proporción susceptible, efectos P1–P10, combinaciones y persona-horas.
+- El recurso genérico se sustituyó por un laboratorio con mapa urbano y recorrido diario de 24 horas, 16 figuras constantes, población directa, permanencia, entorno, medidas P1–P9, gestión P10 y capa secundaria de susceptibilidad.
+- La distancia dejó de convertirse automáticamente en habitantes y se eliminaron las categorías baja/intermedia/alta.
+- La tarjeta abre ahora en el diálogo educativo; `current`, `value`, `vulnerable`, `view` y `embedded` conservan compatibilidad y separan estado transferido de experimento.
+- Verificación numérica: P1/P2=68.640; P3=74.100; P4=73.320; P5=72.540; P6/P9=70.200; P7=74.880; P8=74.100; P10=63.960; P1+P10=54.600.
+- Verificación temporal: 78.000 × 8 h = 624.000 persona-horas/día; P10 produce 511.680. `advanceTime(1500)` avanza seis horas solo al reproducir y pausa conserva la fase.
+- Verificación integrada: cierre interno, externo, Escape y mensaje conservan P10, 10 puntos usados, año, historial y restauran el foco.
+- Verificación visual: recurso completo y diálogo revisados en 1280×900 y 390×844, sin desbordamiento, entidades fuera del `viewBox`, errores de consola ni 404.
+- Regresión: auditoría de 370 combinaciones conserva 39 planes aceptables.
+- Pendientes conocidos: ninguno dentro del alcance del laboratorio de población expuesta.
